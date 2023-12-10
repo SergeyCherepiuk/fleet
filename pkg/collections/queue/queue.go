@@ -4,11 +4,17 @@ import (
 	"errors"
 )
 
-type EmptyQueue error
+type ErrEmptyQueue error
 
 // TODO: Should be unit-tested
 type Queue[T any] struct {
 	buf []T
+}
+
+func New[T any](capacity int) Queue[T] {
+	return Queue[T]{
+		buf: make([]T, capacity),
+	}
 }
 
 func (q Queue[T]) IsEmpty() bool {
@@ -21,7 +27,7 @@ func (q *Queue[T]) Enqueue(value T) {
 
 func (q *Queue[T]) Dequeue() (T, error) {
 	if q.IsEmpty() {
-		return *new(T), EmptyQueue(errors.New("queue is empty"))
+		return *new(T), ErrEmptyQueue(errors.New("queue is empty"))
 	}
 
 	value := q.buf[0]

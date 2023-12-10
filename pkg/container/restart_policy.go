@@ -1,10 +1,10 @@
 package container
 
-type RestartPolicy int
+type RestartPolicy string
 
 const (
-	Always RestartPolicy = iota
-	OnFailure
-	UnlessStopped
-	Never
+	Always        RestartPolicy = "always"
+	OnFailure     RestartPolicy = "on-failure"
+	UnlessStopped RestartPolicy = "unless-stopped"
+	Never         RestartPolicy = "never"
 )

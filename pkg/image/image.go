@@ -13,7 +13,7 @@ type Image struct {
 	Version string
 }
 
-func (i Image) RawName() string {
+func (i Image) RawRef() string {
 	path := path.Join(i.Registy, i.Tag)
 	return fmt.Sprintf("%s:%s", path, i.Version)
 }

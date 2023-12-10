@@ -12,3 +12,12 @@ type Event struct {
 	State       State
 	RequestedAt time.Time
 }
+
+func NewEvent(task Task, state State) Event {
+	return Event{
+		ID:          uuid.New(),
+		Task:        task,
+		State:       state,
+		RequestedAt: time.Now(),
+	}
+}

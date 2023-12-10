@@ -4,14 +4,14 @@ import (
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/image"
-	"github.com/docker/go-connections/nat"
 )
 
 type Container struct {
 	ID    string
 	Image image.Image
 
-	ExposedPorts  nat.PortSet
+	ExposedPorts  map[uint16]uint16
+	Env           []string
 	RestartPolicy RestartPolicy
 
 	CPU    float64
