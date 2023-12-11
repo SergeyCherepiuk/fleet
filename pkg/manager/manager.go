@@ -19,6 +19,7 @@ type Manager struct {
 }
 
 func (m *Manager) Run() {
+	// TODO(SergeyCherepiuk): Explore if observer pattern applicable
 	for {
 		if m.PendingTasks.IsEmpty() {
 			time.Sleep(100 * time.Millisecond)

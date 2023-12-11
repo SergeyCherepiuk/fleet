@@ -22,13 +22,10 @@ func Run(ctx context.Context, container container.Container) (string, error) {
 
 	id, err := createContainer(ctx, container)
 	if err != nil {
-		fmt.Println(err)
 		return "", err
 	}
 
-	err = dockerClient.ContainerStart(ctx, id, types.ContainerStartOptions{})
-	fmt.Println(err)
-	return id, err
+	return id, dockerClient.ContainerStart(ctx, id, types.ContainerStartOptions{})
 }
 
 func pullImage(ctx context.Context, image image.Image) error {
@@ -38,7 +35,8 @@ func pullImage(ctx context.Context, image image.Image) error {
 		return err
 	}
 
-	io.Copy(os.Stderr, reader) // TODO: Improve the formatting of the response
+	// TODO(SergeyCherepiuk): Improve the formatting of the response
+	io.Copy(os.Stderr, reader)
 	reader.Close()
 	return nil
 }

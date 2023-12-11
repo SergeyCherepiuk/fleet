@@ -6,7 +6,7 @@ import (
 
 type ErrEmptyQueue error
 
-// TODO: Should be unit-tested
+// TODO(SergeyCherepiuk): Should be unit-tested
 type Queue[T any] struct {
 	buf []T
 }

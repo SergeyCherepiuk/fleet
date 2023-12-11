@@ -19,7 +19,7 @@ type Worker struct {
 	node.Node
 	ID    uuid.UUID
 	Tasks map[uuid.UUID]task.Task
-	Queue queue.Queue[task.Task] // TODO: Consider if it's needed
+	Queue queue.Queue[task.Task] // TODO(SergeyCherepiuk): Consider if it's needed
 }
 
 func (w *Worker) Execute(event task.Event) error {
@@ -36,7 +36,7 @@ func (w *Worker) Execute(event task.Event) error {
 	case task.Running:
 		return w.run(event.Task)
 	case task.Finished:
-		return w.finish(event.Task.ID)
+		return w.finish(event.Task.ID) // TODO(SergeyCherepiuk): Using ID is an ugly workaround
 	}
 
 	return ErrInvalidEventState(errors.New("worker: invalid event state"))

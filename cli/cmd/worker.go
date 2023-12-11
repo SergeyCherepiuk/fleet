@@ -66,7 +66,7 @@ func notifyManager() error {
 		return err
 	}
 
-	// TODO: Process response
+	// TODO(SergeyCherepiuk): Process response
 	url, err := url.JoinPath("http://"+managerAddr, "worker")
 	if err != nil {
 		return err

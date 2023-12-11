@@ -2,7 +2,6 @@ package node
 
 import (
 	"net"
-	"time"
 )
 
 type Addr struct {
@@ -15,17 +14,11 @@ type Resources struct {
 	Memory int64
 }
 
-type AllocatedResources struct {
-	CPU       float64
-	Memoty    int64
-	Timestamp time.Time
-}
-
 type Node struct {
 	Addr      Addr
 	Resources Resources
 }
 
-func (n Node) Stat() (AllocatedResources, error) {
-	return AllocatedResources{}, nil
+func (n Node) ResourceUsage() (Resources, error) {
+	return Resources{}, nil
 }

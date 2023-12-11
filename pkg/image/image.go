@@ -5,7 +5,7 @@ import (
 	"path"
 )
 
-// NOTE: Only pulled images are supported for now
+// NOTE(SergeyCherepiuk): Only pulled images are supported for now
 type Image struct {
 	ID      string
 	Registy string
