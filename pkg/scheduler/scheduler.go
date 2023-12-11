@@ -1,10 +1,12 @@
 package scheduler
 
 import (
+	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
-	"github.com/SergeyCherepiuk/fleet/pkg/worker"
 )
 
+type ErrNoWorkersAvailable error
+
 type Scheduler interface {
-	SelectWorker(task task.Task, workers []worker.Worker) (worker.Worker, error)
+	SelectWorker(task task.Task, workers []node.Addr) (node.Addr, error)
 }

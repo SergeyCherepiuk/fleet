@@ -1,23 +1,29 @@
 package container
 
 import (
-	"time"
-
 	"github.com/SergeyCherepiuk/fleet/pkg/image"
 )
+
+type RestartPolicy string
+
+const (
+	Always        RestartPolicy = "always"
+	OnFailure     RestartPolicy = "on-failure"
+	UnlessStopped RestartPolicy = "unless-stopped"
+	Never         RestartPolicy = "never"
+)
+
+type RequiredResources struct {
+	CPU    float64
+	Memory int64
+}
 
 type Container struct {
 	ID    string
 	Image image.Image
 
-	ExposedPorts  map[uint16]uint16
-	Env           []string
-	RestartPolicy RestartPolicy
-
-	CPU    float64
-	Memory int
-	Disk   int
-
-	StartedAt  time.Time
-	FinishedAt time.Time
+	ExposedPorts      map[uint16]uint16
+	Env               []string
+	RestartPolicy     RestartPolicy
+	RequiredResources RequiredResources
 }

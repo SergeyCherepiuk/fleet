@@ -21,6 +21,10 @@ func (q Queue[T]) IsEmpty() bool {
 	return len(q.buf) == 0
 }
 
+func (q Queue[T]) Size() int {
+	return len(q.buf)
+}
+
 func (q *Queue[T]) Enqueue(value T) {
 	q.buf = append(q.buf, value)
 }

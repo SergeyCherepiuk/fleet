@@ -1,32 +1,41 @@
 package manager
 
 import (
+	"time"
+
+	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
+	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
-	"github.com/SergeyCherepiuk/fleet/pkg/worker"
+	"github.com/google/uuid"
 )
 
 type Manager struct {
-	Scheduler scheduler.Scheduler
-	Workers   []worker.Worker // TODO: change to []uuid.UUID
-	Pending   chan task.Task
+	node.Node
+	ID           uuid.UUID
+	Scheduler    scheduler.Scheduler
+	WorkerNodes  []node.Addr
+	PendingTasks queue.Queue[task.Task]
 }
 
-func (m Manager) Run() {
+func (m *Manager) Run() {
 	for {
-		select {
-		case t := <-m.Pending:
-			worker, err := m.Scheduler.SelectWorker(t, m.Workers)
-			if err != nil {
-				continue
-			}
-
-			event := task.NewEvent(t, task.Running)
-			sendEvent(worker, event)
+		if m.PendingTasks.IsEmpty() {
+			time.Sleep(100 * time.Millisecond)
+			continue
 		}
-	}
-}
 
-func sendEvent(worker worker.Worker, event task.Event) error {
-	return worker.Execute(event)
+		// t, err := m.PendingTasks.Dequeue()
+		// if err != nil {
+		// 	continue
+		// }
+		//
+		// w, err := m.Scheduler.SelectWorker(t, m.WorkerNodes)
+		// if err != nil {
+		// 	continue
+		// }
+		//
+		// e := task.NewEvent(t, task.Running)
+		// w.Execute(e)
+	}
 }
