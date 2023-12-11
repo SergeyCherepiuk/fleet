@@ -53,6 +53,14 @@ func workerRunE(cmd *cobra.Command, args []string) error {
 
 	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
 
+	if err := notifyManager(); err != nil {
+		return err
+	}
+
+	return backend.StartServer(addr, worker)
+}
+
+func notifyManager() error {
 	workerAddr, err := json.Marshal(Node.Addr)
 	if err != nil {
 		return err
@@ -64,9 +72,7 @@ func workerRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	body := bytes.NewReader(workerAddr)
-	if _, err := http.Post(url, "application/json", body); err != nil {
-		return err
-	}
 
-	return backend.StartServer(addr, worker)
+	_, err = http.Post(url, "application/json", body)
+	return err
 }
