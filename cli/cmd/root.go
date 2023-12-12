@@ -17,6 +17,7 @@ var (
 func init() {
 	RootCmd.AddCommand(ManagerCmd)
 	RootCmd.AddCommand(WorkerCmd)
+	RootCmd.AddCommand(RunCmd)
 }
 
 func root(cmd *cobra.Command, args []string) error {
