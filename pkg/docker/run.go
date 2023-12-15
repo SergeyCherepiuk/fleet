@@ -15,22 +15,22 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-func Run(ctx context.Context, container container.Container) (string, error) {
-	if err := pullImage(ctx, container.Image); err != nil {
+func (r *Runtime) Run(ctx context.Context, container container.Container) (string, error) {
+	if err := r.pullImage(ctx, container.Image); err != nil {
 		return "", err
 	}
 
-	id, err := createContainer(ctx, container)
+	id, err := r.createContainer(ctx, container)
 	if err != nil {
 		return "", err
 	}
 
-	return id, dockerClient.ContainerStart(ctx, id, types.ContainerStartOptions{})
+	return id, r.Client.ContainerStart(ctx, id, types.ContainerStartOptions{})
 }
 
-func pullImage(ctx context.Context, image image.Image) error {
+func (r *Runtime) pullImage(ctx context.Context, image image.Image) error {
 	ref := image.RawRef()
-	reader, err := dockerClient.ImagePull(ctx, ref, types.ImagePullOptions{})
+	reader, err := r.Client.ImagePull(ctx, ref, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func pullImage(ctx context.Context, image image.Image) error {
 	return nil
 }
 
-func createContainer(ctx context.Context, container container.Container) (string, error) {
+func (r *Runtime) createContainer(ctx context.Context, container container.Container) (string, error) {
 	ref := container.Image.RawRef()
 	conf := apicontainer.Config{
 		Image:        ref,
@@ -60,7 +60,7 @@ func createContainer(ctx context.Context, container container.Container) (string
 	}
 	name := fmt.Sprintf("%s", container.Image.Tag)
 
-	resp, err := dockerClient.ContainerCreate(ctx, &conf, &hconf, nil, nil, name)
+	resp, err := r.Client.ContainerCreate(ctx, &conf, &hconf, nil, nil, name)
 	if err != nil {
 		return "", err
 	}

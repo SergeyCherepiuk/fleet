@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
+	"github.com/SergeyCherepiuk/fleet/pkg/docker"
 	"github.com/SergeyCherepiuk/fleet/pkg/manager"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
@@ -27,6 +29,7 @@ var (
 		RunE:    workerRunE,
 	}
 	workerCmdOptions WorkerCmdOptions
+	workerRuntime    c14n.Runtime
 )
 
 func init() {
@@ -42,14 +45,18 @@ func workerPreRunE(cmd *cobra.Command, args []string) error {
 		return errors.New("manager address is not provided")
 	}
 
-	return nil
+	var err error
+	workerRuntime, err = docker.New()
+
+	return err
 }
 
 func workerRunE(cmd *cobra.Command, args []string) error {
 	worker := worker.Worker{
-		Node:  Node,
-		ID:    uuid.New(),
-		Tasks: make(map[uuid.UUID]task.Task),
+		Node:    Node,
+		Runtime: workerRuntime,
+		ID:      uuid.New(),
+		Tasks:   make(map[uuid.UUID]task.Task),
 	}
 
 	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SergeyCherepiuk/fleet/pkg/docker"
+	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
@@ -15,6 +15,7 @@ type ErrInvalidEventState error
 
 type Worker struct {
 	node.Node
+	c14n.Runtime
 	ID    uuid.UUID
 	Tasks map[uuid.UUID]task.Task
 }
@@ -27,7 +28,7 @@ func (w *Worker) Run(t task.Task) error {
 	}()
 
 	ctx := context.Background()
-	id, err := docker.Run(ctx, t.Container)
+	id, err := w.Runtime.Run(ctx, t.Container)
 	if err != nil {
 		t.State = task.Failed
 		return err
@@ -46,7 +47,7 @@ func (w *Worker) Finish(taskId uuid.UUID) error {
 	}()
 
 	ctx := context.Background()
-	if err := docker.Stop(ctx, t.Container); err != nil {
+	if err := w.Runtime.Stop(ctx, t.Container); err != nil {
 		t.State = task.Failed
 		return err
 	}
