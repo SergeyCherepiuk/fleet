@@ -7,7 +7,7 @@ import (
 
 type ErrIPv4NotFound error
 
-func GetLocalIPv4() (net.IP, error) {
+func LocalIPv4() (net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return net.IP{}, err

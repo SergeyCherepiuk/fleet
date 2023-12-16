@@ -43,12 +43,12 @@ func (r *Runtime) pullImage(ctx context.Context, image image.Image) error {
 
 func (r *Runtime) createContainer(ctx context.Context, container container.Container) (string, error) {
 	ref := container.Image.RawRef()
-	conf := apicontainer.Config{
+	config := apicontainer.Config{
 		Image:        ref,
 		Env:          container.Env,
 		ExposedPorts: portSet(maps.Keys(container.ExposedPorts)),
 	}
-	hconf := apicontainer.HostConfig{
+	hostConfig := apicontainer.HostConfig{
 		PortBindings: portMap(container.ExposedPorts),
 		RestartPolicy: apicontainer.RestartPolicy{
 			Name: string(container.RestartPolicy),
@@ -58,9 +58,10 @@ func (r *Runtime) createContainer(ctx context.Context, container container.Conta
 			NanoCPUs: int64(container.RequiredResources.CPU * math.Pow(10, 9)),
 		},
 	}
-	name := fmt.Sprintf("%s", container.Image.Tag)
 
-	resp, err := r.Client.ContainerCreate(ctx, &conf, &hconf, nil, nil, name)
+	resp, err := r.Client.ContainerCreate(
+		ctx, &config, &hostConfig, nil, nil, container.Image.Tag,
+	)
 	if err != nil {
 		return "", err
 	}

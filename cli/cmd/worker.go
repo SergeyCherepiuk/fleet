@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/docker"
@@ -25,33 +28,28 @@ type WorkerCmdOptions struct {
 var (
 	WorkerCmd = &cobra.Command{
 		Use:     "worker",
-		PreRunE: workerPreRunE,
-		RunE:    workerRunE,
+		PreRunE: workerPreRun,
+		RunE:    workerRun,
 	}
 	workerCmdOptions WorkerCmdOptions
 	workerRuntime    c14n.Runtime
 )
 
 func init() {
-	WorkerCmd.Flags().StringVar(&workerCmdOptions.managerAddr, "manager", "", "Address and port of the manager node")
+	WorkerCmd.PersistentFlags().StringVar(&workerCmdOptions.managerAddr, "manager", "", "Address and port of the manager node")
 }
 
-func workerPreRunE(cmd *cobra.Command, args []string) error {
-	if err := RootCmd.RunE(cmd, args); err != nil {
-		return err
-	}
-
+func workerPreRun(_ *cobra.Command, _ []string) error {
 	if workerCmdOptions.managerAddr == "" {
 		return errors.New("manager address is not provided")
 	}
 
 	var err error
 	workerRuntime, err = docker.New()
-
 	return err
 }
 
-func workerRunE(cmd *cobra.Command, args []string) error {
+func workerRun(_ *cobra.Command, _ []string) error {
 	worker := worker.Worker{
 		Node:    Node,
 		Runtime: workerRuntime,
@@ -59,28 +57,50 @@ func workerRunE(cmd *cobra.Command, args []string) error {
 		Tasks:   make(map[uuid.UUID]task.Task),
 	}
 
-	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
-
-	if err := notifyManager(); err != nil {
+	url, err := url.JoinPath("http://", workerCmdOptions.managerAddr, manager.WorkerEndpoint)
+	if err != nil {
 		return err
 	}
 
-	return backend.StartServer(addr, worker)
-}
-
-func notifyManager() error {
 	workerAddr, err := json.Marshal(Node.Addr)
 	if err != nil {
 		return err
 	}
 
-	// TODO(SergeyCherepiuk): Process response
-	url, err := url.JoinPath("http://", workerCmdOptions.managerAddr, manager.WorkerAddEndpoint)
+	if err := notifyManagerWorkerUp(url, workerAddr); err != nil {
+		return err
+	}
+	go notifyManagerWorkerDown(url, workerAddr) // NOTE(SergeyCherepiuk): Works as defer
+
+	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
+	return backend.StartServer(addr, &worker)
+}
+
+func notifyManagerWorkerUp(url string, body []byte) error {
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		return errors.New("worker is up: failed to notify manager")
+	}
+	return nil
+}
+
+func notifyManagerWorkerDown(url string, body []byte) error {
+	sigint := make(chan os.Signal)
+	signal.Notify(sigint, syscall.SIGINT)
+	<-sigint
+	defer os.Exit(0)
+
+	req, err := http.NewRequest("DELETE", url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	body := bytes.NewReader(workerAddr)
+	req.Header.Set("Content-Type", "application/json")
 
-	_, err = http.Post(url, "application/json", body)
-	return err
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return errors.New("worker is down: failed to notify manager")
+	}
+
+	return nil
 }

@@ -14,6 +14,6 @@ type Image struct {
 }
 
 func (i Image) RawRef() string {
-	path := path.Join(i.Registy, i.Tag)
-	return fmt.Sprintf("%s:%s", path, i.Version)
+	ref := path.Join(i.Registy, i.Tag)
+	return fmt.Sprintf("%s:%s", ref, i.Version)
 }

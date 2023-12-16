@@ -2,7 +2,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
@@ -24,7 +23,6 @@ func (w *Worker) Run(t task.Task) error {
 	defer func() {
 		t.StartedAt = time.Now()
 		w.Tasks[t.ID] = t
-		fmt.Printf("%+v\n", w.Tasks)
 	}()
 
 	ctx := context.Background()

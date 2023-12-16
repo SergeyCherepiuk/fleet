@@ -19,6 +19,7 @@ type Node struct {
 	Resources Resources
 }
 
+// TODO(SergeyCherepiuk): Fetch resources usage from the node
 func (n Node) ResourceUsage() (Resources, error) {
 	return Resources{}, nil
 }

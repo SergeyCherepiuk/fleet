@@ -8,5 +8,5 @@ import (
 type ErrNoWorkersAvailable error
 
 type Scheduler interface {
-	SelectWorker(task task.Task, workers []node.Addr) (node.Addr, error)
+	SelectWorker(task task.Task, workers []node.Addr) (addr node.Addr, err error)
 }

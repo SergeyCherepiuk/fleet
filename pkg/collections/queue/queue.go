@@ -7,7 +7,6 @@ import (
 
 type ErrEmptyQueue error
 
-// TODO(SergeyCherepiuk): Should be unit-tested
 type Queue[T any] struct {
 	mu  sync.RWMutex
 	buf []T

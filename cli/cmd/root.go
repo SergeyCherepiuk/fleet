@@ -3,6 +3,7 @@ package cmd
 import (
 	"runtime"
 
+	"github.com/SergeyCherepiuk/fleet/cli/cmd/task"
 	"github.com/SergeyCherepiuk/fleet/internal/memory"
 	"github.com/SergeyCherepiuk/fleet/internal/net"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
@@ -10,18 +11,21 @@ import (
 )
 
 var (
-	RootCmd = &cobra.Command{Use: "fleet", RunE: root}
-	Node    node.Node
+	RootCmd = &cobra.Command{
+		Use:               "fleet",
+		PersistentPreRunE: rootPreRun,
+	}
+	Node node.Node
 )
 
 func init() {
 	RootCmd.AddCommand(ManagerCmd)
 	RootCmd.AddCommand(WorkerCmd)
-	RootCmd.AddCommand(RunCmd)
+	RootCmd.AddCommand(task.TaskCmd)
 }
 
-func root(cmd *cobra.Command, args []string) error {
-	ip, err := net.GetLocalIPv4()
+func rootPreRun(_ *cobra.Command, _ []string) error {
+	ip, err := net.LocalIPv4()
 	if err != nil {
 		return err
 	}

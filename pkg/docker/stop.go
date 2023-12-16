@@ -14,7 +14,6 @@ func (r *Runtime) Stop(ctx context.Context, container container.Container) error
 		return err
 	}
 
-	return r.Client.ContainerRemove(
-		ctx, container.ID, types.ContainerRemoveOptions{RemoveVolumes: true},
-	)
+	removeOpts := types.ContainerRemoveOptions{RemoveVolumes: true}
+	return r.Client.ContainerRemove(ctx, container.ID, removeOpts)
 }

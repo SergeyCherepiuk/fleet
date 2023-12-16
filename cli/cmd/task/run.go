@@ -1,9 +1,10 @@
-package cmd
+package task
 
 import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -15,32 +16,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type RunCmdOptions struct {
-	managerAddr string
+var RunCmd = &cobra.Command{
+	Use:  "run",
+	RunE: runRun,
 }
 
-var (
-	RunCmd = &cobra.Command{
-		Use:     "run",
-		PreRunE: runPreRunE,
-		RunE:    runRunE,
-	}
-	runCmdOptions RunCmdOptions
-)
-
-func init() {
-	RunCmd.Flags().StringVar(&runCmdOptions.managerAddr, "manager", "", "Address and port of the manager node")
-}
-
-func runPreRunE(cmd *cobra.Command, args []string) error {
-	if runCmdOptions.managerAddr == "" {
-		return errors.New("manager address is not provided")
-	}
-
-	return nil
-}
-
-func runRunE(cmd *cobra.Command, args []string) error {
+func runRun(_ *cobra.Command, _ []string) error {
 	t := task.Task{
 		ID:    uuid.New(),
 		State: task.Pending,
@@ -65,12 +46,39 @@ func runRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	url, err := url.JoinPath("http://", runCmdOptions.managerAddr, manager.TaskRunEndpoint)
+	url, err := url.JoinPath("http://", taskCmdOptions.managerAddr, manager.TaskRunEndpoint)
 	if err != nil {
 		return err
 	}
 	body := bytes.NewReader(marshaledTask)
 
-	_, err = http.Post(url, "application/json", body)
-	return err
+	resp, err := http.Post(url, "application/json", body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		message, err := errorMessage(resp.Body)
+		if err != nil {
+			return err
+		}
+		return errors.New(message)
+	}
+
+	return nil
+}
+
+func errorMessage(body io.ReadCloser) (string, error) {
+	defer body.Close()
+	data, err := io.ReadAll(body)
+	if err != nil {
+		return "", err
+	}
+
+	var b struct{ Message string }
+	if err := json.Unmarshal(data, &b); err != nil {
+		return "", err
+	}
+
+	return b.Message, nil
 }

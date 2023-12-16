@@ -3,7 +3,6 @@ package worker
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
@@ -15,7 +14,7 @@ const (
 	TaskFinishEndpoint = "/task/finish"
 )
 
-func StartServer(addr string, worker Worker) error {
+func StartServer(addr string, worker *Worker) error {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -38,11 +37,7 @@ func StartServer(addr string, worker Worker) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
-	taskFinishEndpoint, err := url.JoinPath(TaskFinishEndpoint, "{id}")
-	if err != nil {
-		return err
-	}
-
+	taskFinishEndpoint := fmt.Sprintf("%s/{id}", TaskFinishEndpoint)
 	e.POST(taskFinishEndpoint, func(c echo.Context) error {
 		taskId, err := uuid.Parse(c.Param("id"))
 		if err != nil {
