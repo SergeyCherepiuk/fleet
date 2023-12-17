@@ -10,23 +10,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const HeartbeatInterval = time.Second * 10
+
 type ErrInvalidEventState error
 
 type Worker struct {
-	node.Node
-	c14n.Runtime
-	ID    uuid.UUID
-	Tasks map[uuid.UUID]task.Task
+	ID      uuid.UUID
+	node    node.Node
+	runtime c14n.Runtime
 }
 
-func (w *Worker) Run(t task.Task) error {
-	defer func() {
-		t.StartedAt = time.Now()
-		w.Tasks[t.ID] = t
-	}()
+func New(node node.Node, runtime c14n.Runtime) *Worker {
+	return &Worker{
+		ID:      uuid.New(),
+		node:    node,
+		runtime: runtime,
+	}
+}
 
-	ctx := context.Background()
-	id, err := w.Runtime.Run(ctx, t.Container)
+func (w *Worker) Run(ctx context.Context, t *task.Task) error {
+	defer func() { t.StartedAt = time.Now() }()
+
+	id, err := w.runtime.Run(ctx, t.Container)
 	if err != nil {
 		t.State = task.Failed
 		return err
@@ -37,15 +42,10 @@ func (w *Worker) Run(t task.Task) error {
 	return nil
 }
 
-func (w *Worker) Finish(taskId uuid.UUID) error {
-	t := w.Tasks[taskId]
-	defer func() {
-		t.FinishedAt = time.Now()
-		w.Tasks[taskId] = t
-	}()
+func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
+	defer func() { t.FinishedAt = time.Now() }()
 
-	ctx := context.Background()
-	if err := w.Runtime.Stop(ctx, t.Container); err != nil {
+	if err := w.runtime.Stop(ctx, t.Container); err != nil {
 		t.State = task.Failed
 		return err
 	}
