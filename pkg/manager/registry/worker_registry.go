@@ -7,6 +7,7 @@ import (
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
 
 const Lifetime = 30 * time.Second
@@ -17,8 +18,8 @@ type WorkerRegistry struct {
 
 type Entry struct {
 	Addr  node.Addr
+	Tasks map[uuid.UUID]task.Task
 	exp   time.Time
-	tasks map[uuid.UUID]task.Task
 }
 
 type ErrWorkerNotFound error
@@ -27,6 +28,14 @@ func New() *WorkerRegistry {
 	return &WorkerRegistry{
 		registry: make(map[uuid.UUID]Entry),
 	}
+}
+
+func (wr *WorkerRegistry) TasksIds() []uuid.UUID {
+	ids := make([]uuid.UUID, 0)
+	for _, entry := range wr.registry {
+		ids = append(ids, maps.Keys(entry.Tasks)...)
+	}
+	return ids
 }
 
 func (wr *WorkerRegistry) Watch() {
@@ -68,8 +77,8 @@ func (wr *WorkerRegistry) GetAll() map[uuid.UUID]Entry {
 func (wr *WorkerRegistry) AddWorker(workerId uuid.UUID, workerAddr node.Addr) {
 	wr.registry[workerId] = Entry{
 		Addr:  workerAddr,
+		Tasks: make(map[uuid.UUID]task.Task),
 		exp:   time.Now().Add(Lifetime),
-		tasks: make(map[uuid.UUID]task.Task),
 	}
 }
 
@@ -79,7 +88,7 @@ func (wr *WorkerRegistry) RemoveWorker(workerId uuid.UUID) {
 
 func (wr *WorkerRegistry) FindWorker(taskId uuid.UUID) (uuid.UUID, Entry, error) {
 	for id, entry := range wr.registry {
-		if _, ok := entry.tasks[taskId]; ok {
+		if _, ok := entry.Tasks[taskId]; ok {
 			return id, entry, nil
 		}
 	}
@@ -95,17 +104,18 @@ func (wr *WorkerRegistry) AddTask(workerId uuid.UUID, task task.Task) error {
 		return err
 	}
 
-	entry.tasks[task.ID] = task
+	entry.Tasks[task.ID] = task
 	wr.registry[workerId] = entry
 	return nil
 }
 
 func (wr *WorkerRegistry) RemoveTask(taskId uuid.UUID) error {
-	_, entry, err := wr.FindWorker(taskId)
+	id, entry, err := wr.FindWorker(taskId)
 	if err != nil {
 		return err
 	}
 
-	delete(entry.tasks, taskId) // TODO(SergeyCherepiuk): Need to re-set the entry?
+	delete(entry.Tasks, taskId)
+	wr.registry[id] = entry
 	return nil
 }

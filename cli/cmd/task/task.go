@@ -12,8 +12,8 @@ type TaskCmdOptions struct {
 
 var (
 	TaskCmd = &cobra.Command{
-		Use:     "task",
-		PreRunE: taskPreRun,
+		Use:               "task",
+		PersistentPreRunE: taskPreRun,
 	}
 	taskCmdOptions TaskCmdOptions
 )

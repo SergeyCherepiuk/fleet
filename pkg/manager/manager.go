@@ -79,15 +79,20 @@ func (m *Manager) Finish(taskId uuid.UUID) error {
 		return err
 	}
 
-	workerAddr := fmt.Sprintf("%s:%d", w.Addr.Addr, w.Addr.Port)
-	url, err := url.JoinPath("http://", workerAddr, worker.TaskFinishEndpoint, taskId.String())
-
-	resp, err := http.Post(url, "", nil)
+	t := m.workerRegistry.GetAll()[id].Tasks[taskId]
+	body, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
 
-	var t task.Task
+	workerAddr := fmt.Sprintf("%s:%d", w.Addr.Addr, w.Addr.Port)
+	url, err := url.JoinPath("http://", workerAddr, worker.TaskFinishEndpoint)
+
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+
 	if err := internalhttp.Body(resp, &t); err != nil {
 		return err
 	}
