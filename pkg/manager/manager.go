@@ -109,7 +109,7 @@ func (m *Manager) Finish(tid uuid.UUID) error {
 	return nil
 }
 
-func (m *Manager) Stat() map[uuid.UUID][]task.Task {
+func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 	stat := make(map[uuid.UUID][]task.Task)
 	for id, workerEntry := range m.workerRegistry {
 		stat[id] = maps.Values(workerEntry.Tasks)

@@ -19,8 +19,8 @@ var ListCmd = &cobra.Command{
 	RunE: listRun,
 }
 
-func listRun(cmd *cobra.Command, args []string) error {
-	url, err := url.JoinPath("http://", taskCmdOptions.managerAddr, manager.StatEndpoint)
+func listRun(_ *cobra.Command, _ []string) error {
+	url, err := url.JoinPath("http://", taskCmdOptions.managerAddr, manager.TaskListEndpoint)
 	if err != nil {
 		return err
 	}
