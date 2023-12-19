@@ -14,6 +14,7 @@ import (
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
 	"github.com/google/uuid"
+	"golang.org/x/exp/maps"
 )
 
 type Manager struct {
@@ -106,4 +107,12 @@ func (m *Manager) Finish(tid uuid.UUID) error {
 	workerEntry.Tasks.Add(t)
 	m.workerRegistry.Set(workerEntry.ID, workerEntry)
 	return nil
+}
+
+func (m *Manager) Stat() map[uuid.UUID][]task.Task {
+	stat := make(map[uuid.UUID][]task.Task)
+	for id, workerEntry := range m.workerRegistry {
+		stat[id] = maps.Values(workerEntry.Tasks)
+	}
+	return stat
 }

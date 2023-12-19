@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	StatEndpoint     = "/stat"
 	WorkerEndpoint   = "/worker"
 	TaskRunEndpoint  = "/task/run"
 	TaskStopEndpoint = "/tast/stop"
@@ -19,6 +20,10 @@ const (
 func StartServer(addr string, manager *Manager) error {
 	e := echo.New()
 	e.HideBanner = true
+
+	e.GET(StatEndpoint, func(c echo.Context) error {
+		return c.JSON(http.StatusOK, manager.Stat())
+	})
 
 	workerEndpointWithId := fmt.Sprintf("%s/:id", WorkerEndpoint)
 
