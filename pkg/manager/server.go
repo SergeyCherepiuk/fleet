@@ -33,7 +33,7 @@ func StartServer(addr string, manager *Manager) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
 		}
 
-		manager.workerRegistry.AddWorker(id, addr)
+		manager.workerRegistry.Add(id, addr)
 		return c.NoContent(http.StatusCreated)
 	})
 
@@ -64,7 +64,7 @@ func StartServer(addr string, manager *Manager) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
 		}
 
-		manager.workerRegistry.RemoveWorker(id)
+		manager.workerRegistry.Remove(id)
 		return c.NoContent(http.StatusOK)
 	})
 

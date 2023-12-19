@@ -8,8 +8,8 @@ import (
 	"net/url"
 
 	internalhttp "github.com/SergeyCherepiuk/fleet/internal/http"
-	"github.com/SergeyCherepiuk/fleet/pkg/manager/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
+	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
@@ -18,17 +18,17 @@ import (
 
 type Manager struct {
 	id             uuid.UUID
-	node           *node.Node
+	node           node.Node
 	scheduler      scheduler.Scheduler
-	workerRegistry *registry.WorkerRegistry
+	workerRegistry registry.WorkerRegistry
 }
 
 func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 	manager := Manager{
 		id:             uuid.New(),
-		node:           &node,
+		node:           node,
 		scheduler:      scheduler,
-		workerRegistry: registry.New(),
+		workerRegistry: make(registry.WorkerRegistry),
 	}
 	go manager.workerRegistry.Watch()
 	return &manager
@@ -37,8 +37,8 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 func (m *Manager) Run(t task.Task) error {
 	var err error
 
-	workers := m.workerRegistry.GetAll()
-	id, w, err := m.scheduler.SelectWorker(t, workers)
+	workerEntries := m.workerRegistry.GetAll()
+	workerEntry, err := m.scheduler.SelectWorker(t, workerEntries)
 	if err != nil {
 		return err
 	}
@@ -47,11 +47,13 @@ func (m *Manager) Run(t task.Task) error {
 		if err != nil {
 			t.State = task.Failed
 		}
-		err = m.workerRegistry.AddTask(id, t)
+		workerEntry.Tasks.Add(t)
+		err = m.workerRegistry.Set(workerEntry.ID, workerEntry)
 	}()
 
 	t.State = task.Scheduled
-	if err = m.workerRegistry.AddTask(id, t); err != nil {
+	workerEntry.Tasks.Add(t)
+	if err = m.workerRegistry.Set(workerEntry.ID, workerEntry); err != nil {
 		return err
 	}
 
@@ -60,8 +62,8 @@ func (m *Manager) Run(t task.Task) error {
 		return err
 	}
 
-	workerAddrStr := fmt.Sprintf("%s:%d", w.Addr.Addr, w.Addr.Port)
-	url, err := url.JoinPath("http://", workerAddrStr, worker.TaskRunEndpoint)
+	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
+	url, err := url.JoinPath("http://", addr, worker.TaskRunEndpoint)
 	body := bytes.NewReader(marshaledTask)
 
 	resp, err := http.Post(url, "application/json", body)
@@ -73,20 +75,24 @@ func (m *Manager) Run(t task.Task) error {
 	return err
 }
 
-func (m *Manager) Finish(taskId uuid.UUID) error {
-	id, w, err := m.workerRegistry.FindWorker(taskId)
+func (m *Manager) Finish(tid uuid.UUID) error {
+	workerEntry, err := m.workerRegistry.GetByTaskId(tid)
 	if err != nil {
 		return err
 	}
 
-	t := m.workerRegistry.GetAll()[id].Tasks[taskId]
+	t, err := workerEntry.Tasks.Get(tid)
+	if err != nil {
+		return err
+	}
+
 	body, err := json.Marshal(t)
 	if err != nil {
 		return err
 	}
 
-	workerAddr := fmt.Sprintf("%s:%d", w.Addr.Addr, w.Addr.Port)
-	url, err := url.JoinPath("http://", workerAddr, worker.TaskFinishEndpoint)
+	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
+	url, err := url.JoinPath("http://", addr, worker.TaskFinishEndpoint)
 
 	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -96,7 +102,8 @@ func (m *Manager) Finish(taskId uuid.UUID) error {
 	if err := internalhttp.Body(resp, &t); err != nil {
 		return err
 	}
-	m.workerRegistry.AddTask(id, t)
 
+	workerEntry.Tasks.Add(t)
+	m.workerRegistry.Set(workerEntry.ID, workerEntry)
 	return nil
 }
