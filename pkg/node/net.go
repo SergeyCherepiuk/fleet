@@ -1,4 +1,4 @@
-package net
+package node
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 
 type ErrIPv4NotFound error
 
-func LocalIPv4() (net.IP, error) {
+func (*Node) LocalIPv4() (net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return net.IP{}, err
@@ -21,4 +21,14 @@ func LocalIPv4() (net.IP, error) {
 	}
 
 	return net.IP{}, ErrIPv4NotFound(errors.New("no ipv4 interface"))
+}
+
+func (*Node) RandomPort() (uint16, error) {
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, err
+	}
+	defer listener.Close()
+
+	return uint16(listener.Addr().(*net.TCPAddr).Port), nil
 }

@@ -1,11 +1,7 @@
 package cmd
 
 import (
-	"runtime"
-
 	"github.com/SergeyCherepiuk/fleet/cli/cmd/task"
-	"github.com/SergeyCherepiuk/fleet/internal/memory"
-	"github.com/SergeyCherepiuk/fleet/internal/net"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/spf13/cobra"
 )
@@ -25,27 +21,18 @@ func init() {
 }
 
 func rootPreRun(_ *cobra.Command, _ []string) error {
-	ip, err := net.LocalIPv4()
+	ip, err := Node.LocalIPv4()
 	if err != nil {
 		return err
 	}
 
-	port, err := net.RandomPort()
-	if err != nil {
-		return err
-	}
-
-	memory, err := memory.Total()
+	port, err := Node.RandomPort()
 	if err != nil {
 		return err
 	}
 
 	Node = node.Node{
 		Addr: node.Addr{Addr: ip, Port: port},
-		Resources: node.Resources{
-			CPU:    float64(runtime.NumCPU()),
-			Memory: int64(memory),
-		},
 	}
 	return nil
 }

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	internalhttp "github.com/SergeyCherepiuk/fleet/internal/http"
+	internalhttp "github.com/SergeyCherepiuk/fleet/pkg/internal/http"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"

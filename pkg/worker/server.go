@@ -12,6 +12,7 @@ import (
 const (
 	TaskRunEndpoint    = "/task/run"
 	TaskFinishEndpoint = "/task/finish"
+	StatEndpoint       = "/stat"
 )
 
 func StartServer(addr string, worker *Worker) error {
@@ -56,6 +57,17 @@ func StartServer(addr string, worker *Worker) error {
 		}
 
 		return c.JSON(http.StatusOK, t)
+	})
+
+	e.GET(StatEndpoint, func(c echo.Context) error {
+		stat, err := worker.node.Resources()
+		if err != nil {
+			return echo.NewHTTPError(
+				http.StatusInternalServerError,
+				fmt.Errorf("failed to collect statistics: %w", err),
+			)
+		}
+		return c.JSON(http.StatusOK, stat)
 	})
 
 	return e.Start(addr)
