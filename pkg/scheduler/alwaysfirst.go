@@ -9,7 +9,7 @@ import (
 
 type AlwaysFirst struct{}
 
-func (s AlwaysFirst) SelectWorker(t task.Task, wes []registry.WorkerEntry) (registry.WorkerEntry, error) {
+func (s *AlwaysFirst) SelectWorker(t task.Task, wes []registry.WorkerEntry) (registry.WorkerEntry, error) {
 	if len(wes) > 0 {
 		return wes[0], nil
 	}

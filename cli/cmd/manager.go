@@ -15,7 +15,7 @@ var ManagerCmd = &cobra.Command{
 }
 
 func managerRun(_ *cobra.Command, _ []string) error {
-	manager := manager.New(Node, scheduler.AlwaysFirst{})
+	manager := manager.New(Node, &scheduler.RoundRobin{})
 	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
 	return backend.StartServer(addr, manager)
 }
