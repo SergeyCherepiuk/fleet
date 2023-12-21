@@ -33,6 +33,7 @@ func (w *Worker) Run(ctx context.Context, t *task.Task) error {
 
 	id, err := w.runtime.Run(ctx, t.Container)
 	if err != nil {
+		// TODO(SergeyCherepiuk): Put the error on the event/message bus
 		t.State = task.Failed
 		return err
 	}

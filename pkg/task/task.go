@@ -25,3 +25,8 @@ type Task struct {
 	StartedAt  time.Time
 	FinishedAt time.Time
 }
+
+type Event struct {
+	Task    Task
+	Desired State
+}

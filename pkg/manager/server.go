@@ -82,13 +82,7 @@ func StartServer(addr string, manager *Manager) error {
 			)
 		}
 
-		if err := manager.Run(t); err != nil {
-			return echo.NewHTTPError(
-				http.StatusInternalServerError,
-				fmt.Errorf("failed to run a task: %w", err),
-			)
-		}
-
+		manager.Run(t)
 		return c.NoContent(http.StatusCreated)
 	})
 
@@ -99,13 +93,7 @@ func StartServer(addr string, manager *Manager) error {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid id format")
 		}
 
-		if err := manager.Finish(id); err != nil {
-			return echo.NewHTTPError(
-				http.StatusInternalServerError,
-				fmt.Errorf("failed to stop the task: %w", err),
-			)
-		}
-
+		manager.Stop(id)
 		return c.NoContent(http.StatusOK)
 	})
 

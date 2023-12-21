@@ -20,7 +20,13 @@ type WorkerEntry struct {
 	exp   time.Time
 }
 
-func (wr *WorkerRegistry) Watch() {
+func NewWorkerRegistry() WorkerRegistry {
+	wr := make(WorkerRegistry)
+	go wr.watch()
+	return wr
+}
+
+func (wr *WorkerRegistry) watch() {
 	for {
 		for id, we := range *wr {
 			if we.exp.Before(time.Now()) {
