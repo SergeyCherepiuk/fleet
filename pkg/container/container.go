@@ -22,7 +22,7 @@ type Container struct {
 	ID    string
 	Image image.Image
 
-	ExposedPorts      map[uint16]uint16
+	ExposedPorts      []uint16
 	Env               []string
 	RestartPolicy     RestartPolicy
 	RequiredResources RequiredResources

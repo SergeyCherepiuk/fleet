@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/api/types"
 	apicontainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
-	"golang.org/x/exp/maps"
+	"github.com/google/uuid"
 )
 
 func (r *Runtime) Run(ctx context.Context, container container.Container) (string, error) {
@@ -46,7 +46,7 @@ func (r *Runtime) createContainer(ctx context.Context, container container.Conta
 	config := apicontainer.Config{
 		Image:        ref,
 		Env:          container.Env,
-		ExposedPorts: portSet(maps.Keys(container.ExposedPorts)),
+		ExposedPorts: portSet(container.ExposedPorts),
 	}
 	hostConfig := apicontainer.HostConfig{
 		PortBindings: portMap(container.ExposedPorts),
@@ -58,10 +58,9 @@ func (r *Runtime) createContainer(ctx context.Context, container container.Conta
 			NanoCPUs: int64(container.RequiredResources.CPU * math.Pow(10, 9)),
 		},
 	}
+	name := fmt.Sprintf("%s-%s", container.Image.Tag, uuid.NewString())
 
-	resp, err := r.Client.ContainerCreate(
-		ctx, &config, &hostConfig, nil, nil, container.Image.Tag,
-	)
+	resp, err := r.Client.ContainerCreate(ctx, &config, &hostConfig, nil, nil, name)
 	if err != nil {
 		return "", err
 	}
@@ -78,14 +77,14 @@ func portSet(ports []uint16) nat.PortSet {
 	return portSet
 }
 
-func portMap(exposedPorts map[uint16]uint16) nat.PortMap {
+func portMap(exposedPorts []uint16) nat.PortMap {
 	portMap := nat.PortMap{}
-	for source, destination := range exposedPorts {
-		port := nat.Port(fmt.Sprintf("%d/tcp", source))
+	for _, port := range exposedPorts {
+		port := nat.Port(fmt.Sprintf("%d/tcp", port))
 		bindings := []nat.PortBinding{
 			{
 				HostIP:   "localhost",
-				HostPort: fmt.Sprintf("%d", destination),
+				HostPort: fmt.Sprintf("%d", 0),
 			},
 		}
 		portMap[port] = bindings

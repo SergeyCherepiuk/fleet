@@ -31,7 +31,7 @@ func runRun(_ *cobra.Command, _ []string) error {
 				Tag:     "nginx",
 				Version: "alpine",
 			},
-			ExposedPorts:  map[uint16]uint16{80: 80},
+			ExposedPorts:  []uint16{80},
 			Env:           []string{"foo=bar"},
 			RestartPolicy: container.OnFailure,
 			RequiredResources: container.RequiredResources{
