@@ -10,11 +10,12 @@ import (
 type State string
 
 const (
-	Pending   State = "pending"
-	Scheduled State = "scheduled"
-	Running   State = "running"
-	Finished  State = "finished"
-	Failed    State = "failed"
+	Pending    State = "pending"
+	Scheduled  State = "scheduled"
+	Running    State = "running"
+	Finished   State = "finished"
+	Failed     State = "failed"
+	Restarting State = "restarting"
 )
 
 type Task struct {

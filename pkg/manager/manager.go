@@ -15,6 +15,8 @@ import (
 	"golang.org/x/exp/maps"
 )
 
+const RestartSleepTimeCoefficient = 2
+
 type Manager struct {
 	id             uuid.UUID
 	node           node.Node
@@ -82,6 +84,12 @@ func (m *Manager) watchEventsQueue(interval time.Duration) {
 			m.run(event.Task)
 		case task.Finished:
 			m.finish(event.Task)
+		case task.Restarting:
+			// TODO(SergeyCherepiuk): Schedule restart if the failure cause is
+			// related to image pulling for example, otherwise restart immediately
+			// TODO(SergeyCherepiuk): Disregard number of restarts if task is
+			// running successfully long enough
+			m.scheduleRestart(event.Task)
 		}
 	}
 }
@@ -98,9 +106,10 @@ func (m *Manager) watchMessagesQueue(interval time.Duration) {
 		case task.Running, task.Finished:
 			m.workerRegistry.SetTask(message.From, message.Task)
 		case task.Failed:
-			m.workerRegistry.SetTask(message.From, message.Task)
 			message.Task.Restarts = append(message.Task.Restarts, time.Now())
-			m.Run(message.Task) // TODO(SergeyCherepiuk): Consider retring only N times
+			m.workerRegistry.SetTask(message.From, message.Task)
+			event := task.Event{Task: message.Task, Desired: task.Restarting}
+			m.eventsQueue.Enqueue(event)
 		}
 	}
 }
@@ -128,4 +137,20 @@ func (m *Manager) finish(t task.Task) error {
 	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
 	httpclient.Post(addr, "/task/stop", t)
 	return nil
+}
+
+func (m *Manager) scheduleRestart(t task.Task) {
+	var sleepTime time.Duration
+	if len(t.Restarts) < 2 {
+		sleepTime = time.Second
+	} else {
+		l := len(t.Restarts)
+		lastSleepTime := t.Restarts[l-1].Sub(t.Restarts[l-2])
+		sleepTime = lastSleepTime * RestartSleepTimeCoefficient
+	}
+
+	go func() {
+		time.Sleep(sleepTime)
+		m.run(t)
+	}()
 }
