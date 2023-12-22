@@ -1,7 +1,7 @@
 package registry
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
@@ -11,6 +11,8 @@ import (
 )
 
 const Lifetime = 30 * time.Second
+
+var ErrWorkerNotFound = errors.New("worker is not found")
 
 type WorkerRegistry map[uuid.UUID]WorkerEntry
 
@@ -63,16 +65,14 @@ func (wr *WorkerRegistry) GetByTaskId(tid uuid.UUID) (WorkerEntry, error) {
 		}
 	}
 
-	return WorkerEntry{}, ErrWorkerNotFound(
-		fmt.Errorf("worker that have task with id=%q not found", tid),
-	)
+	return WorkerEntry{}, ErrWorkerNotFound
 }
 
 func (wr *WorkerRegistry) Get(wid uuid.UUID) (WorkerEntry, error) {
 	if w, ok := (*wr)[wid]; ok {
 		return w, nil
 	}
-	return WorkerEntry{}, workerNotFound(wid)
+	return WorkerEntry{}, ErrWorkerNotFound
 }
 
 func (wr *WorkerRegistry) GetAll() []WorkerEntry {
@@ -96,10 +96,4 @@ func (wr *WorkerRegistry) SetTask(wid uuid.UUID, t task.Task) error {
 
 func (wr *WorkerRegistry) Remove(wid uuid.UUID) {
 	delete(*wr, wid)
-}
-
-type ErrWorkerNotFound error
-
-func workerNotFound(wid uuid.UUID) error {
-	return ErrWorkerNotFound(fmt.Errorf("with id=%q not found", wid))
 }

@@ -17,7 +17,7 @@ type CPUStat struct {
 	Usage float64
 }
 
-type ErrNoCoresAvailable error
+var ErrNoCoresAvailable = errors.New("no cpu info available")
 
 var errCPUStat = CPUStat{Cores: 0, Usage: 100.0}
 
@@ -46,7 +46,7 @@ func (*Node) CPU(interval time.Duration) (CPUStat, error) {
 		}
 
 		if len(lines) == 0 {
-			return errCPUStat, ErrNoCoresAvailable(errors.New("no cpu info available"))
+			return errCPUStat, ErrNoCoresAvailable
 		}
 
 		cores = uint(len(lines) - 1)

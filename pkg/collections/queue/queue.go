@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-type ErrEmptyQueue error
+var ErrEmptyQueue = errors.New("queue is empty")
 
 type Queue[T any] struct {
 	mu  sync.RWMutex
@@ -38,7 +38,7 @@ func (q *Queue[T]) Enqueue(value T) {
 
 func (q *Queue[T]) Dequeue() (T, error) {
 	if q.IsEmpty() {
-		return *new(T), ErrEmptyQueue(errors.New("queue is empty"))
+		return *new(T), ErrEmptyQueue
 	}
 
 	q.mu.Lock()

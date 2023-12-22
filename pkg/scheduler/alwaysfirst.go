@@ -1,8 +1,6 @@
 package scheduler
 
 import (
-	"errors"
-
 	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 )
@@ -14,5 +12,5 @@ func (s *AlwaysFirst) SelectWorker(t task.Task, wes []registry.WorkerEntry) (reg
 		return wes[0], nil
 	}
 
-	return registry.WorkerEntry{}, ErrNoWorkersAvailable(errors.New("no workers available"))
+	return registry.WorkerEntry{}, ErrNoWorkersAvailable
 }

@@ -1,8 +1,6 @@
 package scheduler
 
 import (
-	"errors"
-
 	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 )
@@ -13,7 +11,7 @@ type RoundRobin struct {
 
 func (s *RoundRobin) SelectWorker(t task.Task, wes []registry.WorkerEntry) (registry.WorkerEntry, error) {
 	if len(wes) == 0 {
-		return registry.WorkerEntry{}, ErrNoWorkersAvailable(errors.New("no workers available"))
+		return registry.WorkerEntry{}, ErrNoWorkersAvailable
 	}
 
 	if s.last+1 < len(wes) {
