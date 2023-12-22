@@ -2,17 +2,22 @@ package task
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"os"
+	"strings"
+	"text/template"
 
-	"github.com/SergeyCherepiuk/fleet/pkg/manager"
+	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
+
+const Template = `
+{{range $worker_id, $tasks := .}}worker {{$worker_id}}:{{range $tasks}}
+{{.ID}} (state: {{.State}}, restarts: {{len .Restarts}}){{end}}
+{{end}}
+`
 
 var ListCmd = &cobra.Command{
 	Use:  "list",
@@ -20,12 +25,7 @@ var ListCmd = &cobra.Command{
 }
 
 func listRun(_ *cobra.Command, _ []string) error {
-	url, err := url.JoinPath("http://", taskCmdOptions.managerAddr, manager.TaskListEndpoint)
-	if err != nil {
-		return err
-	}
-
-	resp, err := http.Get(url)
+	resp, err := httpclient.Get(taskCmdOptions.managerAddr, "/task/list")
 	if err != nil {
 		return err
 	}
@@ -40,16 +40,7 @@ func listRun(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	fmt.Fprint(os.Stdout, format(stat))
-	return nil
-}
-
-func format(stat map[uuid.UUID][]task.Task) (s string) {
-	for wid, tasks := range stat {
-		s += fmt.Sprintf("worker %s:\n", wid)
-		for i, task := range tasks {
-			s += fmt.Sprintf("%d: %s (%s)\n", i+1, task.ID, task.State)
-		}
-	}
-	return
+	text := strings.TrimSpace(Template)
+	tmpl := template.Must(template.New("list").Parse(text))
+	return tmpl.Execute(os.Stdout, stat)
 }
