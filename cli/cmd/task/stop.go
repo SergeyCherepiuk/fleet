@@ -1,10 +1,12 @@
 package task
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
-	"net/url"
 
-	"github.com/SergeyCherepiuk/fleet/pkg/manager"
+	httpinternal "github.com/SergeyCherepiuk/fleet/cli/cmd/internal/http"
+	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -20,17 +22,16 @@ func stopRun(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	url, err := url.JoinPath(
-		"http://",
-		taskCmdOptions.managerAddr,
-		manager.TaskStopEndpoint,
-		id.String(),
-	)
+	endpoint := fmt.Sprintf("/task/stop/%s", id)
+	resp, err := httpclient.Post(taskCmdOptions.managerAddr, endpoint, nil)
 	if err != nil {
 		return err
 	}
 
-	// TODO(SergeyCherepiuk): Process response
-	_, err = http.Post(url, "", nil)
-	return err
+	if resp.StatusCode != http.StatusCreated {
+		message := httpinternal.ErrorMessage(resp.Body)
+		return errors.New(message)
+	}
+
+	return nil
 }

@@ -21,7 +21,7 @@ func (tr *TaskRegistry) GetAll() []task.Task {
 	return maps.Values(*tr)
 }
 
-func (tr *TaskRegistry) Add(t task.Task) {
+func (tr *TaskRegistry) Set(t task.Task) {
 	(*tr)[t.ID] = t
 }
 

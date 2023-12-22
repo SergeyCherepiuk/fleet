@@ -5,49 +5,34 @@ import (
 	"net/http"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
+	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
+	"github.com/SergeyCherepiuk/fleet/pkg/worker"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-)
-
-const (
-	WorkerEndpoint   = "/worker"
-	TaskRunEndpoint  = "/task/run"
-	TaskStopEndpoint = "/tast/stop"
-	TaskListEndpoint = "/task/list"
 )
 
 func StartServer(addr string, manager *Manager) error {
 	e := echo.New()
 	e.HideBanner = true
 
-	e.GET(TaskListEndpoint, func(c echo.Context) error {
-		return c.JSON(http.StatusOK, manager.Tasks())
-	})
+	workerGroup := e.Group("/worker")
+	workerWithIDGroup := workerGroup.Group("/:id", parseID)
 
-	workerEndpointWithId := fmt.Sprintf("%s/:id", WorkerEndpoint)
-
-	e.POST(workerEndpointWithId, func(c echo.Context) error {
-		id, err := uuid.Parse(c.Param("id"))
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid id format")
-		}
-
+	workerWithIDGroup.POST("", func(c echo.Context) error {
 		var addr node.Addr
 		if err := c.Bind(&addr); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
 		}
 
-		manager.workerRegistry.Add(id, addr)
+		id := c.Get("id").(uuid.UUID)
+		workerEntry := registry.NewWorkerEntry(addr)
+		manager.workerRegistry.Set(id, workerEntry)
 		return c.NoContent(http.StatusCreated)
 	})
 
-	e.PUT(workerEndpointWithId, func(c echo.Context) error {
-		id, err := uuid.Parse(c.Param("id"))
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid id format")
-		}
-
+	workerWithIDGroup.PUT("", func(c echo.Context) error {
+		id := c.Get("id").(uuid.UUID)
 		if err := manager.workerRegistry.Renew(id); err != nil {
 			return echo.NewHTTPError(
 				http.StatusInternalServerError,
@@ -58,22 +43,31 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusOK)
 	})
 
-	e.DELETE(workerEndpointWithId, func(c echo.Context) error {
-		id, err := uuid.Parse(c.Param("id"))
-		if err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, "invalid id format")
-		}
-
+	workerWithIDGroup.DELETE("", func(c echo.Context) error {
 		var addr node.Addr
 		if err := c.Bind(&addr); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
 		}
 
+		id := c.Get("id").(uuid.UUID)
 		manager.workerRegistry.Remove(id)
 		return c.NoContent(http.StatusOK)
 	})
 
-	e.POST(TaskRunEndpoint, func(c echo.Context) error {
+	workerGroup.POST("/message", func(c echo.Context) error {
+		var message worker.Message
+		if err := c.Bind(&message); err != nil {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				fmt.Errorf("invalid message format: %w", err),
+			)
+		}
+
+		manager.messagesQueue.Enqueue(message)
+		return c.NoContent(http.StatusCreated)
+	})
+
+	e.POST("/task/run", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
 			return echo.NewHTTPError(
@@ -86,16 +80,27 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
-	taskStopEndpoint := fmt.Sprintf("%s/:id", TaskStopEndpoint)
-	e.POST(taskStopEndpoint, func(c echo.Context) error {
+	e.POST("/task/stop/:id", func(c echo.Context) error {
+		id := c.Get("id").(uuid.UUID)
+		manager.Stop(id)
+		return c.NoContent(http.StatusOK)
+	}, parseID)
+
+	e.GET("/task/list", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, manager.Tasks())
+	})
+
+	return e.Start(addr)
+}
+
+func parseID(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid id format")
 		}
 
-		manager.Stop(id)
-		return c.NoContent(http.StatusOK)
-	})
-
-	return e.Start(addr)
+		c.Set("id", id)
+		return next(c)
+	}
 }

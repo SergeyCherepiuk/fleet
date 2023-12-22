@@ -1,15 +1,11 @@
 package manager
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
-	internalhttp "github.com/SergeyCherepiuk/fleet/pkg/internal/http"
+	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"
@@ -25,6 +21,7 @@ type Manager struct {
 	scheduler      scheduler.Scheduler
 	workerRegistry registry.WorkerRegistry
 	eventsQueue    queue.Queue[task.Event]
+	messagesQueue  queue.Queue[worker.Message]
 }
 
 func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
@@ -34,9 +31,11 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 		scheduler:      scheduler,
 		workerRegistry: registry.NewWorkerRegistry(),
 		eventsQueue:    queue.New[task.Event](0),
+		messagesQueue:  queue.New[worker.Message](0),
 	}
 
-	go manager.watchingEventsQueue(100 * time.Millisecond)
+	go manager.watchEventsQueue(100 * time.Millisecond)
+	go manager.watchMessagesQueue(100 * time.Millisecond)
 
 	return &manager
 }
@@ -70,7 +69,7 @@ func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 	return stat
 }
 
-func (m *Manager) watchingEventsQueue(interval time.Duration) {
+func (m *Manager) watchEventsQueue(interval time.Duration) {
 	for {
 		event, err := m.eventsQueue.Dequeue()
 		if err != nil {
@@ -87,45 +86,37 @@ func (m *Manager) watchingEventsQueue(interval time.Duration) {
 	}
 }
 
-func (m *Manager) run(t task.Task) error {
-	var err error
+func (m *Manager) watchMessagesQueue(interval time.Duration) {
+	for {
+		message, err := m.messagesQueue.Dequeue()
+		if err != nil {
+			time.Sleep(interval)
+			continue
+		}
 
+		switch message.Task.State {
+		case task.Running, task.Finished:
+			m.workerRegistry.SetTask(message.From, message.Task)
+		case task.Failed:
+			m.workerRegistry.SetTask(message.From, message.Task)
+			message.Task.Restarts = append(message.Task.Restarts, time.Now())
+			m.Run(message.Task) // TODO(SergeyCherepiuk): Consider retring only N times
+		}
+	}
+}
+
+func (m *Manager) run(t task.Task) error {
 	workerEntries := m.workerRegistry.GetAll()
 	workerEntry, err := m.scheduler.SelectWorker(t, workerEntries)
 	if err != nil {
 		return err
 	}
 
-	defer func() {
-		if err != nil {
-			t.State = task.Failed
-		}
-		workerEntry.Tasks.Add(t)
-		err = m.workerRegistry.Set(workerEntry.ID, workerEntry)
-	}()
-
 	t.State = task.Scheduled
-	workerEntry.Tasks.Add(t)
-	if err = m.workerRegistry.Set(workerEntry.ID, workerEntry); err != nil {
-		return err
-	}
-
-	marshaledTask, err := json.Marshal(t)
-	if err != nil {
-		return err
-	}
 
 	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
-	url, err := url.JoinPath("http://", addr, worker.TaskRunEndpoint)
-	body := bytes.NewReader(marshaledTask)
-
-	resp, err := http.Post(url, "application/json", body)
-	if err != nil {
-		return err
-	}
-
-	err = internalhttp.Body(resp, &t)
-	return err
+	httpclient.Post(addr, "/task/run", t)
+	return nil
 }
 
 func (m *Manager) finish(t task.Task) error {
@@ -134,24 +125,7 @@ func (m *Manager) finish(t task.Task) error {
 		return err
 	}
 
-	body, err := json.Marshal(t)
-	if err != nil {
-		return err
-	}
-
 	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
-	url, err := url.JoinPath("http://", addr, worker.TaskFinishEndpoint)
-
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	if err := internalhttp.Body(resp, &t); err != nil {
-		return err
-	}
-
-	workerEntry.Tasks.Add(t)
-	m.workerRegistry.Set(workerEntry.ID, workerEntry)
+	httpclient.Post(addr, "/task/stop", t)
 	return nil
 }

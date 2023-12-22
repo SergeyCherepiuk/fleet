@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
+	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 )
@@ -14,7 +15,6 @@ const Lifetime = 30 * time.Second
 type WorkerRegistry map[uuid.UUID]WorkerEntry
 
 type WorkerEntry struct {
-	ID    uuid.UUID
 	Addr  node.Addr
 	Tasks TaskRegistry
 	exp   time.Time
@@ -24,6 +24,14 @@ func NewWorkerRegistry() WorkerRegistry {
 	wr := make(WorkerRegistry)
 	go wr.watch()
 	return wr
+}
+
+func NewWorkerEntry(addr node.Addr) WorkerEntry {
+	return WorkerEntry{
+		Addr:  addr,
+		Tasks: make(TaskRegistry),
+		exp:   time.Now().Add(Lifetime),
+	}
 }
 
 func (wr *WorkerRegistry) watch() {
@@ -71,21 +79,18 @@ func (wr *WorkerRegistry) GetAll() []WorkerEntry {
 	return maps.Values(*wr)
 }
 
-func (wr *WorkerRegistry) Add(wid uuid.UUID, addr node.Addr) {
-	(*wr)[wid] = WorkerEntry{
-		ID:    uuid.New(),
-		Addr:  addr,
-		Tasks: make(TaskRegistry),
-		exp:   time.Now().Add(Lifetime),
-	}
+func (wr *WorkerRegistry) Set(wid uuid.UUID, we WorkerEntry) {
+	(*wr)[wid] = we
 }
 
-func (wr *WorkerRegistry) Set(wid uuid.UUID, we WorkerEntry) error {
-	if _, err := wr.Get(wid); err != nil {
-		return nil
+func (wr *WorkerRegistry) SetTask(wid uuid.UUID, t task.Task) error {
+	workerEntry, err := wr.Get(wid)
+	if err != nil {
+		return err
 	}
 
-	(*wr)[wid] = we
+	workerEntry.Tasks.Set(t)
+	wr.Set(wid, workerEntry)
 	return nil
 }
 

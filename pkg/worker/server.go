@@ -9,17 +9,11 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const (
-	TaskRunEndpoint    = "/task/run"
-	TaskFinishEndpoint = "/task/finish"
-	StatEndpoint       = "/stat"
-)
-
 func StartServer(addr string, worker *Worker) error {
 	e := echo.New()
 	e.HideBanner = true
 
-	e.POST(TaskRunEndpoint, func(c echo.Context) error {
+	e.POST("/task/run", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
 			return echo.NewHTTPError(
@@ -30,16 +24,13 @@ func StartServer(addr string, worker *Worker) error {
 
 		ctx := context.Background()
 		if err := worker.Run(ctx, &t); err != nil {
-			return echo.NewHTTPError(
-				http.StatusInternalServerError,
-				fmt.Errorf("failed to run the task: %w", err),
-			)
+			c.JSON(http.StatusInternalServerError, t)
 		}
 
 		return c.JSON(http.StatusCreated, t)
 	})
 
-	e.POST(TaskFinishEndpoint, func(c echo.Context) error {
+	e.POST("/task/stop", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
 			return echo.NewHTTPError(
@@ -50,16 +41,13 @@ func StartServer(addr string, worker *Worker) error {
 
 		ctx := context.Background()
 		if err := worker.Finish(ctx, &t); err != nil {
-			return echo.NewHTTPError(
-				http.StatusInternalServerError,
-				fmt.Errorf("failed to stop the task: %w", err),
-			)
+			return c.JSON(http.StatusInternalServerError, t)
 		}
 
 		return c.JSON(http.StatusOK, t)
 	})
 
-	e.GET(StatEndpoint, func(c echo.Context) error {
+	e.GET("/stat", func(c echo.Context) error {
 		stat, err := worker.node.Resources()
 		if err != nil {
 			return echo.NewHTTPError(
@@ -67,6 +55,7 @@ func StartServer(addr string, worker *Worker) error {
 				fmt.Errorf("failed to collect statistics: %w", err),
 			)
 		}
+
 		return c.JSON(http.StatusOK, stat)
 	})
 
