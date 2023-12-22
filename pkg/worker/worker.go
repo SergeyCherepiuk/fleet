@@ -14,6 +14,8 @@ import (
 
 const HeartbeatInterval = time.Second * 10
 
+// TODO(SergeyCherepiuk): Worker should periodically query the list of
+// running containers to make sure none of the task failed
 type Worker struct {
 	ID          uuid.UUID
 	node        node.Node

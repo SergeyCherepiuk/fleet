@@ -67,6 +67,7 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
+	// TODO(SergeyCherepiuk): Tasks with state "Scheduled" are not on the list of tasks
 	e.POST("/task/run", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
@@ -83,7 +84,7 @@ func StartServer(addr string, manager *Manager) error {
 	e.POST("/task/stop/:id", func(c echo.Context) error {
 		id := c.Get("id").(uuid.UUID)
 		manager.Stop(id)
-		return c.NoContent(http.StatusOK)
+		return c.NoContent(http.StatusCreated)
 	}, parseID)
 
 	e.GET("/task/list", func(c echo.Context) error {
