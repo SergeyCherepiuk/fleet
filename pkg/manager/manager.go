@@ -48,7 +48,7 @@ func (m *Manager) Run(t task.Task) {
 }
 
 func (m *Manager) Stop(tid uuid.UUID) error {
-	we, err := m.workerRegistry.GetByTaskId(tid)
+	_, we, err := m.workerRegistry.GetByTaskId(tid)
 	if err != nil {
 		return err
 	}
@@ -116,12 +116,14 @@ func (m *Manager) watchMessagesQueue(interval time.Duration) {
 
 func (m *Manager) run(t task.Task) error {
 	workerEntries := m.workerRegistry.GetAll()
-	workerEntry, err := m.scheduler.SelectWorker(t, workerEntries)
+	workerId, workerEntry, err := m.scheduler.SelectWorker(t, workerEntries)
 	if err != nil {
 		return err
 	}
 
 	t.State = task.Scheduled
+	workerEntry.Tasks.Set(t)
+	m.workerRegistry.Set(workerId, workerEntry)
 
 	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
 	httpclient.Post(addr, "/task/run", t)
@@ -129,7 +131,7 @@ func (m *Manager) run(t task.Task) error {
 }
 
 func (m *Manager) finish(t task.Task) error {
-	workerEntry, err := m.workerRegistry.GetByTaskId(t.ID)
+	_, workerEntry, err := m.workerRegistry.GetByTaskId(t.Id)
 	if err != nil {
 		return err
 	}

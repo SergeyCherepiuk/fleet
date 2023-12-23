@@ -17,9 +17,9 @@ func StartServer(addr string, manager *Manager) error {
 	e.HideBanner = true
 
 	workerGroup := e.Group("/worker")
-	workerWithIDGroup := workerGroup.Group("/:id", parseID)
+	workerWithIdGroup := workerGroup.Group("/:id", parseId)
 
-	workerWithIDGroup.POST("", func(c echo.Context) error {
+	workerWithIdGroup.POST("", func(c echo.Context) error {
 		var addr node.Addr
 		if err := c.Bind(&addr); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
@@ -31,7 +31,7 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
-	workerWithIDGroup.PUT("", func(c echo.Context) error {
+	workerWithIdGroup.PUT("", func(c echo.Context) error {
 		id := c.Get("id").(uuid.UUID)
 		if err := manager.workerRegistry.Renew(id); err != nil {
 			return echo.NewHTTPError(
@@ -43,7 +43,7 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusOK)
 	})
 
-	workerWithIDGroup.DELETE("", func(c echo.Context) error {
+	workerWithIdGroup.DELETE("", func(c echo.Context) error {
 		var addr node.Addr
 		if err := c.Bind(&addr); err != nil {
 			return echo.NewHTTPError(http.StatusBadRequest, "invalid worker node address")
@@ -67,7 +67,6 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
-	// TODO(SergeyCherepiuk): Tasks with state "Scheduled" are not on the list of tasks
 	e.POST("/task/run", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
@@ -85,7 +84,7 @@ func StartServer(addr string, manager *Manager) error {
 		id := c.Get("id").(uuid.UUID)
 		manager.Stop(id)
 		return c.NoContent(http.StatusCreated)
-	}, parseID)
+	}, parseId)
 
 	e.GET("/task/list", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, manager.Tasks())
@@ -94,7 +93,7 @@ func StartServer(addr string, manager *Manager) error {
 	return e.Start(addr)
 }
 
-func parseID(next echo.HandlerFunc) echo.HandlerFunc {
+func parseId(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		id, err := uuid.Parse(c.Param("id"))
 		if err != nil {

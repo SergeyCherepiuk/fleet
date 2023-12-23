@@ -19,7 +19,7 @@ const (
 )
 
 type Task struct {
-	ID        uuid.UUID
+	Id        uuid.UUID
 	State     State
 	Container container.Container
 	Restarts  []time.Time
@@ -30,7 +30,7 @@ type Task struct {
 
 func New(container container.Container) *Task {
 	return &Task{
-		ID:        uuid.New(),
+		Id:        uuid.New(),
 		State:     Pending,
 		Container: container,
 		Restarts:  make([]time.Time, 0),

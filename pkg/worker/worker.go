@@ -17,7 +17,7 @@ const HeartbeatInterval = time.Second * 10
 // TODO(SergeyCherepiuk): Worker should periodically query the list of
 // running containers to make sure none of the task failed
 type Worker struct {
-	ID          uuid.UUID
+	Id          uuid.UUID
 	node        node.Node
 	runtime     c14n.Runtime
 	managerAddr string
@@ -25,7 +25,7 @@ type Worker struct {
 
 func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 	worker := &Worker{
-		ID:          uuid.New(),
+		Id:          uuid.New(),
 		node:        node,
 		runtime:     runtime,
 		managerAddr: managerAddr,
@@ -40,7 +40,7 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 func (w *Worker) Run(ctx context.Context, t *task.Task) error {
 	defer func() {
 		t.StartedAt = time.Now()
-		message := Message{From: w.ID, Task: *t}
+		message := Message{From: w.Id, Task: *t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
 
@@ -58,7 +58,7 @@ func (w *Worker) Run(ctx context.Context, t *task.Task) error {
 func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
 	defer func() {
 		t.FinishedAt = time.Now()
-		message := Message{From: w.ID, Task: *t}
+		message := Message{From: w.Id, Task: *t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
 
@@ -72,14 +72,14 @@ func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
 }
 
 func (w *Worker) registerWorker() error {
-	endpoint := fmt.Sprintf("/worker/%s", w.ID)
+	endpoint := fmt.Sprintf("/worker/%s", w.Id)
 	_, err := httpclient.Post(w.managerAddr, endpoint, w.node.Addr)
 	return err
 }
 
 func (w *Worker) sendHeartbeats() {
 	for {
-		endpoint := fmt.Sprintf("/worker/%s", w.ID)
+		endpoint := fmt.Sprintf("/worker/%s", w.Id)
 		httpclient.Put(w.managerAddr, endpoint, nil)
 		time.Sleep(HeartbeatInterval)
 	}

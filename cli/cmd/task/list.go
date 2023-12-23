@@ -15,7 +15,7 @@ import (
 
 const Template = `
 {{range $worker_id, $tasks := .}}worker {{$worker_id}}:{{range $tasks}}
-{{.ID}} (state: {{.State}}, restarts: {{len .Restarts}}){{end}}
+{{.Id}} (state: {{.State}}, restarts: {{len .Restarts}}){{end}}
 {{end}}
 `
 

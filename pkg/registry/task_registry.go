@@ -24,7 +24,7 @@ func (tr *TaskRegistry) GetAll() []task.Task {
 }
 
 func (tr *TaskRegistry) Set(t task.Task) {
-	(*tr)[t.ID] = t
+	(*tr)[t.Id] = t
 }
 
 func (tr *TaskRegistry) Remove(tid uuid.UUID) error {

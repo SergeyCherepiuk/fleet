@@ -7,7 +7,6 @@ import (
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
-	"golang.org/x/exp/maps"
 )
 
 const Lifetime = 30 * time.Second
@@ -58,14 +57,14 @@ func (wr *WorkerRegistry) Renew(wid uuid.UUID) error {
 	return nil
 }
 
-func (wr *WorkerRegistry) GetByTaskId(tid uuid.UUID) (WorkerEntry, error) {
-	for _, entry := range *wr {
+func (wr *WorkerRegistry) GetByTaskId(tid uuid.UUID) (uuid.UUID, WorkerEntry, error) {
+	for id, entry := range *wr {
 		if _, ok := entry.Tasks[tid]; ok {
-			return entry, nil
+			return id, entry, nil
 		}
 	}
 
-	return WorkerEntry{}, ErrWorkerNotFound
+	return uuid.Nil, WorkerEntry{}, ErrWorkerNotFound
 }
 
 func (wr *WorkerRegistry) Get(wid uuid.UUID) (WorkerEntry, error) {
@@ -75,8 +74,8 @@ func (wr *WorkerRegistry) Get(wid uuid.UUID) (WorkerEntry, error) {
 	return WorkerEntry{}, ErrWorkerNotFound
 }
 
-func (wr *WorkerRegistry) GetAll() []WorkerEntry {
-	return maps.Values(*wr)
+func (wr *WorkerRegistry) GetAll() map[uuid.UUID]WorkerEntry {
+	return *wr
 }
 
 func (wr *WorkerRegistry) Set(wid uuid.UUID, we WorkerEntry) {
