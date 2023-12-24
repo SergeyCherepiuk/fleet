@@ -39,6 +39,7 @@ func (wr *WorkerRegistry) watch() {
 	for {
 		for id, we := range *wr {
 			if we.exp.Before(time.Now()) {
+				// TODO(SergeyCherepiuk): Re-run the tasks if the worker node goes down
 				delete(*wr, id)
 			}
 		}

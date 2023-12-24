@@ -4,6 +4,24 @@ import (
 	"github.com/SergeyCherepiuk/fleet/pkg/image"
 )
 
+type Labels map[string]string
+
+func (l *Labels) With(other Labels) Labels {
+	for k, v := range other {
+		(*l)[k] = v
+	}
+	return *l
+}
+
+const (
+	TypeLabelKey   = "com.fleet.key"
+	TypeLabelValue = "container"
+)
+
+var DefaultLabels = Labels{
+	TypeLabelKey: TypeLabelValue,
+}
+
 type RestartPolicy string
 
 const (
@@ -18,12 +36,29 @@ type RequiredResources struct {
 	Memory int64
 }
 
-type Container struct {
-	ID    string
-	Image image.Image
-
+type Config struct {
 	ExposedPorts      []uint16
 	Env               []string
+	Labels            Labels
 	RestartPolicy     RestartPolicy
 	RequiredResources RequiredResources
+}
+
+type Container struct {
+	ID     string
+	Image  image.Image
+	Config Config
+}
+
+func New(image image.Image, config Config) *Container {
+	return &Container{
+		Image: image,
+		Config: Config{
+			ExposedPorts:      config.ExposedPorts,
+			Env:               config.Env,
+			Labels:            config.Labels.With(DefaultLabels),
+			RestartPolicy:     config.RestartPolicy,
+			RequiredResources: config.RequiredResources,
+		},
+	}
 }

@@ -29,8 +29,7 @@ func (r *Runtime) Run(ctx context.Context, container container.Container) (strin
 }
 
 func (r *Runtime) pullImage(ctx context.Context, image image.Image) error {
-	ref := image.RawRef()
-	reader, err := r.Client.ImagePull(ctx, ref, types.ImagePullOptions{})
+	reader, err := r.Client.ImagePull(ctx, image.Ref, types.ImagePullOptions{})
 	if err != nil {
 		return err
 	}
@@ -41,24 +40,21 @@ func (r *Runtime) pullImage(ctx context.Context, image image.Image) error {
 	return nil
 }
 
-func (r *Runtime) createContainer(ctx context.Context, container container.Container) (string, error) {
-	ref := container.Image.RawRef()
+func (r *Runtime) createContainer(ctx context.Context, cont container.Container) (string, error) {
 	config := apicontainer.Config{
-		Image:        ref,
-		Env:          container.Env,
-		ExposedPorts: portSet(container.ExposedPorts),
+		Image:        cont.Image.Ref,
+		Env:          cont.Config.Env,
+		Labels:       cont.Config.Labels,
+		ExposedPorts: portSet(cont.Config.ExposedPorts),
 	}
 	hostConfig := apicontainer.HostConfig{
-		PortBindings: portMap(container.ExposedPorts),
-		RestartPolicy: apicontainer.RestartPolicy{
-			Name: string(container.RestartPolicy),
-		},
+		PortBindings: portMap(cont.Config.ExposedPorts),
 		Resources: apicontainer.Resources{
-			Memory:   container.RequiredResources.Memory,
-			NanoCPUs: int64(container.RequiredResources.CPU * math.Pow(10, 9)),
+			Memory:   cont.Config.RequiredResources.Memory,
+			NanoCPUs: int64(cont.Config.RequiredResources.CPU * math.Pow(10, 9)),
 		},
 	}
-	name := fmt.Sprintf("%s-%s", container.Image.Tag, uuid.NewString())
+	name := fmt.Sprintf("%s-%s", cont.Image.Ref, uuid.NewString())
 
 	resp, err := r.Client.ContainerCreate(ctx, &config, &hostConfig, nil, nil, name)
 	if err != nil {

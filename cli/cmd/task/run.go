@@ -19,13 +19,10 @@ var RunCmd = &cobra.Command{
 
 func runRun(_ *cobra.Command, _ []string) error {
 	i := image.Image{
-		Registy: "docker.io/library",
-		Tag:     "nginx",
-		Version: "alpine",
+		Ref: "docker.io/library/nginx:alpine",
 	}
 
-	c := container.Container{
-		Image:         i,
+	cc := container.Config{
 		ExposedPorts:  []uint16{80},
 		Env:           []string{"foo=bar"},
 		RestartPolicy: container.OnFailure,
@@ -35,7 +32,9 @@ func runRun(_ *cobra.Command, _ []string) error {
 		},
 	}
 
-	t := task.New(c)
+	c := container.New(i, cc)
+
+	t := task.New(*c)
 
 	resp, err := httpclient.Post(taskCmdOptions.managerAddr, "/task/run", t)
 	if err != nil {

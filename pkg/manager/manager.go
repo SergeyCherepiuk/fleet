@@ -15,7 +15,12 @@ import (
 	"golang.org/x/exp/maps"
 )
 
-const RestartSleepTimeCoefficient = 2
+const (
+	EventQueueInterval   = 100 * time.Microsecond
+	MessageQueueInterval = 100 * time.Microsecond
+
+	RestartSleepTimeCoefficient = 2
+)
 
 type Manager struct {
 	id             uuid.UUID
@@ -36,8 +41,8 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 		messagesQueue:  queue.New[worker.Message](0),
 	}
 
-	go manager.watchEventsQueue(100 * time.Millisecond)
-	go manager.watchMessagesQueue(100 * time.Millisecond)
+	go manager.watchEventsQueue()
+	go manager.watchMessagesQueue()
 
 	return &manager
 }
@@ -71,11 +76,11 @@ func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 	return stat
 }
 
-func (m *Manager) watchEventsQueue(interval time.Duration) {
+func (m *Manager) watchEventsQueue() {
 	for {
 		event, err := m.eventsQueue.Dequeue()
 		if err != nil {
-			time.Sleep(interval)
+			time.Sleep(EventQueueInterval)
 			continue
 		}
 
@@ -94,11 +99,11 @@ func (m *Manager) watchEventsQueue(interval time.Duration) {
 	}
 }
 
-func (m *Manager) watchMessagesQueue(interval time.Duration) {
+func (m *Manager) watchMessagesQueue() {
 	for {
 		message, err := m.messagesQueue.Dequeue()
 		if err != nil {
-			time.Sleep(interval)
+			time.Sleep(MessageQueueInterval)
 			continue
 		}
 

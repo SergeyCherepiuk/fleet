@@ -12,7 +12,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const HeartbeatInterval = time.Second * 10
+const (
+	HeartbeatInterval = time.Second * 10
+	InspectInterval   = time.Second
+)
 
 // TODO(SergeyCherepiuk): Worker should periodically query the list of
 // running containers to make sure none of the task failed
@@ -31,8 +34,9 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 		managerAddr: managerAddr,
 	}
 
-	go worker.registerWorker()
+	worker.registerWorker()
 	go worker.sendHeartbeats()
+	go worker.inspectTasks()
 
 	return worker
 }
@@ -82,5 +86,26 @@ func (w *Worker) sendHeartbeats() {
 		endpoint := fmt.Sprintf("/worker/%s", w.Id)
 		httpclient.Put(w.managerAddr, endpoint, nil)
 		time.Sleep(HeartbeatInterval)
+	}
+}
+
+func (w *Worker) inspectTasks() {
+	for {
+		ctx := context.Background()
+		containers, err := w.runtime.Containers(ctx)
+		if err != nil {
+			continue
+		}
+
+		containerIdsToStates := make(map[string]string)
+		for _, container := range containers {
+			state, _ := w.runtime.ContainerState(ctx, container.ID)
+			containerIdsToStates[container.ID] = state
+		}
+
+		// TODO(SergeyCherepiuk): After worker will also own its copy of the registry
+		// compute the difference between desired and actual states and report is to the manager
+
+		time.Sleep(InspectInterval)
 	}
 }
