@@ -24,7 +24,8 @@ func runRun(_ *cobra.Command, _ []string) error {
 
 	cc := container.Config{
 		ExposedPorts:  []uint16{80},
-		Env:           []string{"foo=bar"},
+		Env:           make([]string, 0),
+		Labels:        make(container.Labels),
 		RestartPolicy: container.OnFailure,
 		RequiredResources: container.RequiredResources{
 			CPU:    4.0,

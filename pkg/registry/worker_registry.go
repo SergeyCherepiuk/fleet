@@ -18,12 +18,10 @@ type WorkerRegistry map[uuid.UUID]WorkerEntry
 type WorkerEntry struct {
 	Addr  node.Addr
 	Tasks TaskRegistry
-	exp   time.Time
 }
 
 func NewWorkerRegistry() WorkerRegistry {
 	wr := make(WorkerRegistry)
-	go wr.watch()
 	return wr
 }
 
@@ -31,31 +29,7 @@ func NewWorkerEntry(addr node.Addr) WorkerEntry {
 	return WorkerEntry{
 		Addr:  addr,
 		Tasks: make(TaskRegistry),
-		exp:   time.Now().Add(Lifetime),
 	}
-}
-
-func (wr *WorkerRegistry) watch() {
-	for {
-		for id, we := range *wr {
-			if we.exp.Before(time.Now()) {
-				// TODO(SergeyCherepiuk): Re-run the tasks if the worker node goes down
-				delete(*wr, id)
-			}
-		}
-		time.Sleep(time.Second)
-	}
-}
-
-func (wr *WorkerRegistry) Renew(wid uuid.UUID) error {
-	we, err := wr.Get(wid)
-	if err != nil {
-		return err
-	}
-
-	we.exp = time.Now().Add(Lifetime)
-	(*wr)[wid] = we
-	return nil
 }
 
 func (wr *WorkerRegistry) GetByTaskId(tid uuid.UUID) (uuid.UUID, WorkerEntry, error) {
@@ -94,6 +68,12 @@ func (wr *WorkerRegistry) SetTask(wid uuid.UUID, t task.Task) error {
 	return nil
 }
 
-func (wr *WorkerRegistry) Remove(wid uuid.UUID) {
+func (wr *WorkerRegistry) Remove(wid uuid.UUID) (TaskRegistry, error) {
+	we, ok := (*wr)[wid]
+	if !ok {
+		return make(TaskRegistry, 0), ErrWorkerNotFound
+	}
+
 	delete(*wr, wid)
+	return we.Tasks, nil
 }

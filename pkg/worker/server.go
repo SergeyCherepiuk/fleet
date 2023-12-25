@@ -59,5 +59,12 @@ func StartServer(addr string, worker *Worker) error {
 		return c.JSON(http.StatusOK, stat)
 	})
 
+	e.GET("/heartbeat", func(c echo.Context) error {
+		if err := worker.CancleShutdown(); err != nil {
+			return c.NoContent(http.StatusInternalServerError)
+		}
+		return c.NoContent(http.StatusOK)
+	})
+
 	return e.Start(addr)
 }

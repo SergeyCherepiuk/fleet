@@ -54,7 +54,7 @@ func (r *Runtime) createContainer(ctx context.Context, cont container.Container)
 			NanoCPUs: int64(cont.Config.RequiredResources.CPU * math.Pow(10, 9)),
 		},
 	}
-	name := fmt.Sprintf("%s-%s", cont.Image.Ref, uuid.NewString())
+	name := uuid.NewString()
 
 	resp, err := r.Client.ContainerCreate(ctx, &config, &hostConfig, nil, nil, name)
 	if err != nil {

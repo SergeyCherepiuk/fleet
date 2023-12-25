@@ -36,6 +36,7 @@ type RequiredResources struct {
 	Memory int64
 }
 
+// TODO(SergeyCherepiuk): Add name field (manager's name + uuid)
 type Config struct {
 	ExposedPorts      []uint16
 	Env               []string

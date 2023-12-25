@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
@@ -15,8 +16,9 @@ import (
 )
 
 const (
-	EventQueueInterval   = 100 * time.Microsecond
-	MessageQueueInterval = 100 * time.Microsecond
+	EventQueueInterval   = 100 * time.Millisecond
+	MessageQueueInterval = 100 * time.Millisecond
+	HeartbeatInterval    = 2 * time.Second
 
 	RestartSleepTimeCoefficient = 2
 )
@@ -42,6 +44,7 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 
 	go manager.watchEventsQueue()
 	go manager.watchMessagesQueue()
+	go manager.sendHeartbeats()
 
 	return &manager
 }
@@ -77,6 +80,10 @@ func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 
 func (m *Manager) watchEventsQueue() {
 	for {
+		if len(m.workerRegistry) == 0 {
+			continue
+		}
+
 		event, err := m.eventsQueue.Dequeue()
 		if err != nil {
 			time.Sleep(EventQueueInterval)
@@ -115,6 +122,21 @@ func (m *Manager) watchMessagesQueue() {
 			event := task.Event{Task: message.Task, Desired: task.Restarting}
 			m.eventsQueue.Enqueue(event)
 		}
+	}
+}
+
+func (m *Manager) sendHeartbeats() {
+	for {
+		for wid, workerEntry := range m.workerRegistry {
+			resp, err := httpclient.Get(workerEntry.Addr.String(), "/heartbeat")
+			if err != nil || resp.StatusCode != http.StatusOK {
+				tasks, _ := m.workerRegistry.Remove(wid)
+				for _, t := range maps.Values(tasks) {
+					m.Run(t)
+				}
+			}
+		}
+		time.Sleep(HeartbeatInterval)
 	}
 }
 

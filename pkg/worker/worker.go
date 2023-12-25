@@ -3,9 +3,14 @@ package worker
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
+	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
+	"github.com/SergeyCherepiuk/fleet/pkg/container"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
@@ -13,30 +18,33 @@ import (
 )
 
 const (
-	HeartbeatInterval = time.Second * 10
-	InspectInterval   = time.Second
+	InspectInterval        = time.Second
+	ShutdownTimeoutSeconds = 5
 )
 
 // TODO(SergeyCherepiuk): Worker should periodically query the list of
 // running containers to make sure none of the task failed
+// TODO(SergeyCherepiuk): Catch SIGINT and shutdown gracefully stopping all tasks
 type Worker struct {
-	Id          uuid.UUID
-	node        node.Node
-	runtime     c14n.Runtime
-	managerAddr string
+	Id           uuid.UUID
+	node         node.Node
+	runtime      c14n.Runtime
+	managerAddr  string
+	shutdownCmds queue.Queue[*exec.Cmd]
 }
 
 func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 	worker := &Worker{
-		Id:          uuid.New(),
-		node:        node,
-		runtime:     runtime,
-		managerAddr: managerAddr,
+		Id:           uuid.New(),
+		node:         node,
+		runtime:      runtime,
+		managerAddr:  managerAddr,
+		shutdownCmds: queue.New[*exec.Cmd](0),
 	}
 
 	worker.registerWorker()
-	go worker.sendHeartbeats()
 	go worker.inspectTasks()
+	go worker.spawnShutdownProcesses()
 
 	return worker
 }
@@ -81,14 +89,6 @@ func (w *Worker) registerWorker() error {
 	return err
 }
 
-func (w *Worker) sendHeartbeats() {
-	for {
-		endpoint := fmt.Sprintf("/worker/%s", w.Id)
-		httpclient.Put(w.managerAddr, endpoint, nil)
-		time.Sleep(HeartbeatInterval)
-	}
-}
-
 func (w *Worker) inspectTasks() {
 	for {
 		ctx := context.Background()
@@ -108,4 +108,33 @@ func (w *Worker) inspectTasks() {
 
 		time.Sleep(InspectInterval)
 	}
+}
+
+func (w *Worker) spawnShutdownProcesses() {
+	for {
+		sleep := fmt.Sprintf("sleep %d", ShutdownTimeoutSeconds)
+		kill := fmt.Sprintf("kill -15 %d", os.Getpid())
+		stop := fmt.Sprintf(
+			"docker rm -f $(docker ps -qaf 'label=%s=%s')",
+			container.TypeLabelKey, container.TypeLabelValue,
+		)
+
+		commands := strings.Join([]string{sleep, kill, stop}, "; ")
+		cmd := exec.Command("/bin/sh", "-c", commands)
+		w.shutdownCmds.Enqueue(cmd)
+		cmd.Run()
+	}
+}
+
+func (w *Worker) CancleShutdown() error {
+	cmd, err := w.shutdownCmds.Dequeue()
+	if err != nil {
+		return nil
+	}
+
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+
+	return exec.Command("kill", "-9", fmt.Sprint(cmd.Process.Pid)).Run()
 }
