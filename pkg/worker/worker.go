@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -24,7 +25,6 @@ const (
 
 // TODO(SergeyCherepiuk): Worker should periodically query the list of
 // running containers to make sure none of the task failed
-// TODO(SergeyCherepiuk): Catch SIGINT and shutdown gracefully stopping all tasks
 type Worker struct {
 	Id           uuid.UUID
 	node         node.Node
@@ -42,9 +42,10 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 		shutdownCmds: queue.New[*exec.Cmd](0),
 	}
 
-	worker.registerWorker()
+	worker.register()
 	go worker.inspectTasks()
 	go worker.spawnShutdownProcesses()
+	go worker.catchInterrupt()
 
 	return worker
 }
@@ -83,7 +84,20 @@ func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
 	return nil
 }
 
-func (w *Worker) registerWorker() error {
+func (w *Worker) CancleShutdown() error {
+	cmd, err := w.shutdownCmds.Dequeue()
+	if err != nil {
+		return nil
+	}
+
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+
+	return exec.Command("kill", "-9", fmt.Sprint(cmd.Process.Pid)).Run()
+}
+
+func (w *Worker) register() error {
 	endpoint := fmt.Sprintf("/worker/%s", w.Id)
 	_, err := httpclient.Post(w.managerAddr, endpoint, w.node.Addr)
 	return err
@@ -126,15 +140,20 @@ func (w *Worker) spawnShutdownProcesses() {
 	}
 }
 
-func (w *Worker) CancleShutdown() error {
-	cmd, err := w.shutdownCmds.Dequeue()
+func (w *Worker) catchInterrupt() {
+	ch := make(chan os.Signal)
+	signal.Notify(ch, os.Interrupt)
+	<-ch
+
+	defer os.Exit(0)
+
+	ctx := context.Background()
+	containers, err := w.runtime.Containers(ctx)
 	if err != nil {
-		return nil
+		return
 	}
 
-	if cmd == nil || cmd.Process == nil {
-		return nil
+	for _, container := range containers {
+		w.runtime.Stop(ctx, container)
 	}
-
-	return exec.Command("kill", "-9", fmt.Sprint(cmd.Process.Pid)).Run()
 }
