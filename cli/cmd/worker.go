@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/docker"
@@ -41,6 +40,5 @@ func workerPreRun(_ *cobra.Command, _ []string) error {
 
 func workerRun(_ *cobra.Command, _ []string) error {
 	worker := worker.New(Node, workerRuntime, workerCmdOptions.managerAddr)
-	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
-	return backend.StartServer(addr, worker)
+	return backend.StartServer(Node.Addr.String(), worker)
 }

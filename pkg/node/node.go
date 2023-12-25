@@ -2,6 +2,7 @@ package node
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"time"
 )
@@ -9,6 +10,10 @@ import (
 type Addr struct {
 	Addr net.IP
 	Port uint16
+}
+
+func (a Addr) String() string {
+	return fmt.Sprintf("%s:%d", a.Addr, a.Port)
 }
 
 type Node struct {

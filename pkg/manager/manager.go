@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
@@ -130,8 +129,7 @@ func (m *Manager) run(t task.Task) error {
 	workerEntry.Tasks.Set(t)
 	m.workerRegistry.Set(workerId, workerEntry)
 
-	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
-	httpclient.Post(addr, "/task/run", t)
+	httpclient.Post(workerEntry.Addr.String(), "/task/run", t)
 	return nil
 }
 
@@ -141,8 +139,7 @@ func (m *Manager) finish(t task.Task) error {
 		return err
 	}
 
-	addr := fmt.Sprintf("%s:%d", workerEntry.Addr.Addr, workerEntry.Addr.Port)
-	httpclient.Post(addr, "/task/stop", t)
+	httpclient.Post(workerEntry.Addr.String(), "/task/stop", t)
 	return nil
 }
 

@@ -31,18 +31,6 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
-	workerWithIdGroup.PUT("", func(c echo.Context) error {
-		id := c.Get("id").(uuid.UUID)
-		if err := manager.workerRegistry.Renew(id); err != nil {
-			return echo.NewHTTPError(
-				http.StatusInternalServerError,
-				fmt.Errorf("failed to renew worker's expiration time %w", err),
-			)
-		}
-
-		return c.NoContent(http.StatusOK)
-	})
-
 	workerWithIdGroup.DELETE("", func(c echo.Context) error {
 		var addr node.Addr
 		if err := c.Bind(&addr); err != nil {

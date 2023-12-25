@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/SergeyCherepiuk/fleet/pkg/manager"
 	backend "github.com/SergeyCherepiuk/fleet/pkg/manager"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"
@@ -16,6 +14,5 @@ var ManagerCmd = &cobra.Command{
 
 func managerRun(_ *cobra.Command, _ []string) error {
 	manager := manager.New(Node, &scheduler.RoundRobin{})
-	addr := fmt.Sprintf("%s:%d", Node.Addr.Addr, Node.Addr.Port)
-	return backend.StartServer(addr, manager)
+	return backend.StartServer(Node.Addr.String(), manager)
 }
