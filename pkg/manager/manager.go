@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
+	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
-	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/scheduler"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
@@ -24,22 +24,22 @@ const (
 )
 
 type Manager struct {
-	id             uuid.UUID
-	node           node.Node
-	scheduler      scheduler.Scheduler
-	workerRegistry registry.WorkerRegistry
-	eventsQueue    queue.Queue[task.Event]
-	messagesQueue  queue.Queue[worker.Message]
+	id            uuid.UUID
+	node          node.Node
+	scheduler     scheduler.Scheduler
+	store         consensus.Store
+	eventsQueue   queue.Queue[task.Event]
+	messagesQueue queue.Queue[worker.Message]
 }
 
 func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 	manager := Manager{
-		id:             uuid.New(),
-		node:           node,
-		scheduler:      scheduler,
-		workerRegistry: registry.NewWorkerRegistry(),
-		eventsQueue:    queue.New[task.Event](0),
-		messagesQueue:  queue.New[worker.Message](0),
+		id:            uuid.New(),
+		node:          node,
+		scheduler:     scheduler,
+		store:         consensus.NewLocalStore(),
+		eventsQueue:   queue.New[task.Event](0),
+		messagesQueue: queue.New[worker.Message](0),
 	}
 
 	go manager.watchEventsQueue()
@@ -49,18 +49,40 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 	return &manager
 }
 
+func (m *Manager) AddWorker(wid uuid.UUID, addr node.Addr) {
+	worker := consensus.Worker{
+		Addr:  addr,
+		Tasks: make(map[uuid.UUID]task.Task),
+	}
+	cmd := consensus.SetWorkerCommand{
+		Index:    m.store.LastIndex() + 1,
+		WorkerId: wid,
+		Worker:   worker,
+	}
+	m.store.CommitChange(cmd) // Error is ignored (SetWorker command cannot return an error)
+	// TODO(SergeyCherepiuk): Broadcast the command
+}
+
+func (m *Manager) RemoveWorker(wid uuid.UUID) error {
+	cmd := consensus.RemoveWorkerCommand{
+		Index:    m.store.LastIndex() + 1,
+		WorkerId: wid,
+	}
+	if _, err := m.store.CommitChange(cmd); err != nil {
+		return err
+	}
+
+	// TODO(SergeyCherepiuk): Broadcast the command
+	return nil
+}
+
 func (m *Manager) Run(t task.Task) {
 	e := task.Event{Task: t, Desired: task.Running}
 	m.eventsQueue.Enqueue(e)
 }
 
 func (m *Manager) Stop(tid uuid.UUID) error {
-	_, we, err := m.workerRegistry.GetByTaskId(tid)
-	if err != nil {
-		return err
-	}
-
-	t, err := we.Tasks.Get(tid)
+	t, err := m.store.GetTask(tid)
 	if err != nil {
 		return err
 	}
@@ -72,7 +94,7 @@ func (m *Manager) Stop(tid uuid.UUID) error {
 
 func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 	stat := make(map[uuid.UUID][]task.Task)
-	for id, workerEntry := range m.workerRegistry {
+	for id, workerEntry := range m.store.AllWorkers() {
 		stat[id] = maps.Values(workerEntry.Tasks)
 	}
 	return stat
@@ -80,7 +102,7 @@ func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
 
 func (m *Manager) watchEventsQueue() {
 	for {
-		if len(m.workerRegistry) == 0 {
+		if m.store.Size() == 0 {
 			continue
 		}
 
@@ -96,8 +118,6 @@ func (m *Manager) watchEventsQueue() {
 		case task.Finished:
 			m.finish(event.Task)
 		case task.Restarting:
-			// TODO(SergeyCherepiuk): Schedule restart if the failure cause is
-			// related to image pulling for example, otherwise restart immediately
 			// TODO(SergeyCherepiuk): Disregard number of restarts if task is
 			// running successfully long enough
 			m.scheduleRestart(event.Task)
@@ -114,11 +134,17 @@ func (m *Manager) watchMessagesQueue() {
 		}
 
 		switch message.Task.State {
-		case task.Running, task.Finished:
-			m.workerRegistry.SetTask(message.From, message.Task)
-		case task.Failed:
-			message.Task.Restarts = append(message.Task.Restarts, time.Now())
-			m.workerRegistry.SetTask(message.From, message.Task)
+		case task.Running, task.Finished, task.Failed:
+			cmd := consensus.SetTaskCommand{
+				Index:    m.store.LastIndex() + 1,
+				WorkerId: message.From,
+				Task:     message.Task,
+			}
+			m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+			// TODO(SergeyCherepiuk): Broadcast the command
+		}
+
+		if message.Task.State == task.Restarting {
 			event := task.Event{Task: message.Task, Desired: task.Restarting}
 			m.eventsQueue.Enqueue(event)
 		}
@@ -127,11 +153,16 @@ func (m *Manager) watchMessagesQueue() {
 
 func (m *Manager) sendHeartbeats() {
 	for {
-		for wid, workerEntry := range m.workerRegistry {
-			resp, err := httpclient.Get(workerEntry.Addr.String(), "/heartbeat")
+		for wid, worker := range m.store.AllWorkers() {
+			resp, err := httpclient.Get(worker.Addr.String(), "/heartbeat")
 			if err != nil || resp.StatusCode != http.StatusOK {
-				tasks, _ := m.workerRegistry.Remove(wid)
-				for _, t := range maps.Values(tasks) {
+				cmd := consensus.RemoveWorkerCommand{
+					Index:    m.store.LastIndex() + 1,
+					WorkerId: wid,
+				}
+				m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+				// TODO(SergeyCherepiuk): Broadcast the command
+				for _, t := range worker.Tasks {
 					m.Run(t)
 				}
 			}
@@ -141,27 +172,32 @@ func (m *Manager) sendHeartbeats() {
 }
 
 func (m *Manager) run(t task.Task) error {
-	workerEntries := m.workerRegistry.GetAll()
-	workerId, workerEntry, err := m.scheduler.SelectWorker(t, workerEntries)
+	workers := m.store.AllWorkers()
+	workerId, worker, err := m.scheduler.SelectWorker(t, workers)
 	if err != nil {
 		return err
 	}
 
 	t.State = task.Scheduled
-	workerEntry.Tasks.Set(t)
-	m.workerRegistry.Set(workerId, workerEntry)
+	cmd := consensus.SetTaskCommand{
+		Index:    m.store.LastIndex() + 1,
+		WorkerId: workerId,
+		Task:     t,
+	}
+	m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+	// TODO(SergeyCherepiuk): Broadcast the command
 
-	httpclient.Post(workerEntry.Addr.String(), "/task/run", t)
+	httpclient.Post(worker.Addr.String(), "/task/run", t)
 	return nil
 }
 
 func (m *Manager) finish(t task.Task) error {
-	_, workerEntry, err := m.workerRegistry.GetByTaskId(t.Id)
+	_, worker, err := m.store.GetWorkerByTaskId(t.Id)
 	if err != nil {
 		return err
 	}
 
-	httpclient.Post(workerEntry.Addr.String(), "/task/stop", t)
+	httpclient.Post(worker.Addr.String(), "/task/stop", t)
 	return nil
 }
 
@@ -177,6 +213,7 @@ func (m *Manager) scheduleRestart(t task.Task) {
 
 	go func() {
 		time.Sleep(sleepTime)
+		t.Restarts = append(t.Restarts, time.Now())
 		m.run(t)
 	}()
 }

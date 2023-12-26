@@ -34,7 +34,6 @@ func (r *Runtime) pullImage(ctx context.Context, image image.Image) error {
 		return err
 	}
 
-	// TODO(SergeyCherepiuk): Improve the formatting of the response
 	io.Copy(os.Stderr, reader)
 	reader.Close()
 	return nil

@@ -3,7 +3,7 @@ package scheduler
 import (
 	"sort"
 
-	"github.com/SergeyCherepiuk/fleet/pkg/registry"
+	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
@@ -13,9 +13,9 @@ type RoundRobin struct {
 	last int
 }
 
-func (s *RoundRobin) SelectWorker(t task.Task, wes map[uuid.UUID]registry.WorkerEntry) (uuid.UUID, registry.WorkerEntry, error) {
+func (s *RoundRobin) SelectWorker(t task.Task, wes map[uuid.UUID]consensus.Worker) (uuid.UUID, consensus.Worker, error) {
 	if len(wes) == 0 {
-		return uuid.Nil, registry.WorkerEntry{}, ErrNoWorkersAvailable
+		return uuid.Nil, consensus.Worker{}, ErrNoWorkersAvailable
 	}
 
 	if s.last+1 < len(wes) {

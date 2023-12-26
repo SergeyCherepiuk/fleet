@@ -17,6 +17,10 @@ var StopCmd = &cobra.Command{
 }
 
 func stopRun(_ *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return errors.New("no task id provided")
+	}
+
 	id, err := uuid.Parse(args[0])
 	if err != nil {
 		return err

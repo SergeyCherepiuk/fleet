@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
-	"github.com/SergeyCherepiuk/fleet/pkg/registry"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
 	"github.com/google/uuid"
@@ -26,8 +25,7 @@ func StartServer(addr string, manager *Manager) error {
 		}
 
 		id := c.Get("id").(uuid.UUID)
-		workerEntry := registry.NewWorkerEntry(addr)
-		manager.workerRegistry.Set(id, workerEntry)
+		manager.AddWorker(id, addr)
 		return c.NoContent(http.StatusCreated)
 	})
 
@@ -38,7 +36,10 @@ func StartServer(addr string, manager *Manager) error {
 		}
 
 		id := c.Get("id").(uuid.UUID)
-		manager.workerRegistry.Remove(id)
+		if err := manager.RemoveWorker(id); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err)
+		}
+
 		return c.NoContent(http.StatusOK)
 	})
 
