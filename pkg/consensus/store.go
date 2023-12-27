@@ -23,6 +23,7 @@ var (
 	ErrLogOutOfSync   = errors.New("log is out of sync")
 	ErrWorkerNotFound = errors.New("worker is not found")
 	ErrTaskNotFound   = errors.New("task is not found")
+	ErrUnknownCommand = errors.New("unknown command")
 )
 
 type store struct {
@@ -56,11 +57,10 @@ func (s *store) GetTask(tid uuid.UUID) (task.Task, error) {
 }
 
 func (s *store) GetWorker(wid uuid.UUID) (Worker, error) {
-	worker, ok := s.state[wid]
-	if !ok {
-		return Worker{}, ErrWorkerNotFound
+	if worker, ok := s.state[wid]; ok {
+		return worker, nil
 	}
-	return worker, nil
+	return Worker{}, ErrWorkerNotFound
 }
 
 func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
@@ -96,7 +96,10 @@ func (s *store) CommitChange(cmd Command) (int, error) {
 		err = s.removeWorker(cmd)
 	case SetTaskCommand:
 		err = s.setTask(cmd)
+	default:
+		err = ErrUnknownCommand
 	}
+
 	if err != nil {
 		return 0, err
 	}

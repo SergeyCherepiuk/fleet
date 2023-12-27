@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	httpinternal "github.com/SergeyCherepiuk/fleet/cli/cmd/internal/http"
+	httpinternal "github.com/SergeyCherepiuk/fleet/internal/http"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"

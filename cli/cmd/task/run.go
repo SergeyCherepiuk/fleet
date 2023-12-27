@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	httpinternal "github.com/SergeyCherepiuk/fleet/cli/cmd/internal/http"
+	httpinternal "github.com/SergeyCherepiuk/fleet/internal/http"
 	"github.com/SergeyCherepiuk/fleet/pkg/container"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/image"

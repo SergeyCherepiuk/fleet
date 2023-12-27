@@ -50,16 +50,16 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 }
 
 func (m *Manager) AddWorker(wid uuid.UUID, addr node.Addr) {
-	worker := consensus.Worker{
-		Addr:  addr,
-		Tasks: make(map[uuid.UUID]task.Task),
-	}
 	cmd := consensus.SetWorkerCommand{
 		Index:    m.store.LastIndex() + 1,
 		WorkerId: wid,
-		Worker:   worker,
+		Worker: consensus.Worker{
+			Addr:  addr,
+			Tasks: make(map[uuid.UUID]task.Task),
+		},
 	}
 	m.store.CommitChange(cmd) // Error is ignored (SetWorker command cannot return an error)
+
 	// TODO(SergeyCherepiuk): Broadcast the command
 }
 
@@ -141,6 +141,7 @@ func (m *Manager) watchMessagesQueue() {
 				Task:     message.Task,
 			}
 			m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+
 			// TODO(SergeyCherepiuk): Broadcast the command
 		}
 
@@ -161,7 +162,9 @@ func (m *Manager) sendHeartbeats() {
 					WorkerId: wid,
 				}
 				m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+
 				// TODO(SergeyCherepiuk): Broadcast the command
+
 				for _, t := range worker.Tasks {
 					m.Run(t)
 				}
@@ -179,12 +182,14 @@ func (m *Manager) run(t task.Task) error {
 	}
 
 	t.State = task.Scheduled
+
 	cmd := consensus.SetTaskCommand{
 		Index:    m.store.LastIndex() + 1,
 		WorkerId: workerId,
 		Task:     t,
 	}
 	m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
+
 	// TODO(SergeyCherepiuk): Broadcast the command
 
 	httpclient.Post(worker.Addr.String(), "/task/run", t)

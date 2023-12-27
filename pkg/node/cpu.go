@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SergeyCherepiuk/fleet/pkg/internal/math"
+	"github.com/SergeyCherepiuk/fleet/internal/math"
 	"golang.org/x/exp/maps"
 )
 

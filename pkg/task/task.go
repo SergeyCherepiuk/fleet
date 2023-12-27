@@ -38,7 +38,6 @@ func New(container container.Container) *Task {
 }
 
 type Event struct {
-	Task     Task
-	Desired  State
-	WorkerId uuid.UUID
+	Task    Task
+	Desired State
 }

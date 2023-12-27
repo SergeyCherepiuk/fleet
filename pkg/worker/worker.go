@@ -11,6 +11,7 @@ import (
 
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
+	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/container"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
@@ -29,6 +30,7 @@ type Worker struct {
 	Id           uuid.UUID
 	node         node.Node
 	runtime      c14n.Runtime
+	store        consensus.Store
 	managerAddr  string
 	shutdownCmds queue.Queue[*exec.Cmd]
 }
@@ -38,6 +40,7 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 		Id:           uuid.New(),
 		node:         node,
 		runtime:      runtime,
+		store:        consensus.NewLocalStore(),
 		managerAddr:  managerAddr,
 		shutdownCmds: queue.New[*exec.Cmd](0),
 	}
