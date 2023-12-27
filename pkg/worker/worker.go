@@ -50,7 +50,18 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 	go worker.spawnShutdownProcesses()
 	go worker.catchInterrupt()
 
+	go worker.inspectStore()
+
 	return worker
+}
+
+func (w *Worker) inspectStore() {
+	for {
+		for id, worker := range w.store.AllWorkers() {
+			fmt.Println(id, worker.Tasks)
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func (w *Worker) Run(ctx context.Context, t *task.Task) error {
@@ -85,6 +96,15 @@ func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
 
 	t.State = task.Finished
 	return nil
+}
+
+func (w *Worker) CommitChanges(cmds ...consensus.Command) (int, error) {
+	for _, cmd := range cmds {
+		if off, err := w.store.CommitChange(cmd); err != nil {
+			return off, err
+		}
+	}
+	return 0, nil
 }
 
 func (w *Worker) CancleShutdown() error {

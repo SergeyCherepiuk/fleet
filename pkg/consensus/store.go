@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
@@ -13,6 +14,7 @@ type Store interface {
 	GetTask(taskId uuid.UUID) (task.Task, error)
 	GetWorker(worketId uuid.UUID) (Worker, error)
 	GetWorkerByTaskId(taskId uuid.UUID) (uuid.UUID, Worker, error)
+	GetLastNCommands(n int) []Command
 	Size() int
 
 	LastIndex() int
@@ -72,6 +74,10 @@ func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
 	return uuid.Nil, Worker{}, ErrWorkerNotFound
 }
 
+func (s *store) GetLastNCommands(n int) []Command {
+	return s.log[len(s.log)-n:]
+}
+
 func (s *store) Size() int {
 	return len(s.state)
 }
@@ -80,22 +86,22 @@ func (s *store) LastIndex() int {
 	if s.Size() == 0 {
 		return -1
 	}
-	return s.log[len(s.log)-1].GetIndex()
+	return s.log[len(s.log)-1].Index
 }
 
 func (s *store) CommitChange(cmd Command) (int, error) {
-	if s.LastIndex() != cmd.GetIndex()-1 {
-		return cmd.GetIndex() - s.LastIndex(), ErrLogOutOfSync
+	if s.LastIndex() != cmd.Index-1 {
+		return cmd.Index - s.LastIndex(), ErrLogOutOfSync
 	}
 
 	var err error
-	switch cmd := cmd.(type) {
-	case SetWorkerCommand:
-		s.setWorker(cmd)
-	case RemoveWorkerCommand:
-		err = s.removeWorker(cmd)
-	case SetTaskCommand:
-		err = s.setTask(cmd)
+	switch cmd.Type {
+	case SetWorker:
+		err = s.setWorker(cmd.Data)
+	case RemoveWorker:
+		err = s.removeWorker(cmd.Data)
+	case SetTask:
+		err = s.setTask(cmd.Data)
 	default:
 		err = ErrUnknownCommand
 	}
@@ -108,29 +114,45 @@ func (s *store) CommitChange(cmd Command) (int, error) {
 	return 0, nil
 }
 
-func (s *store) setWorker(cmd SetWorkerCommand) {
-	s.state[cmd.WorkerId] = Worker{
-		Addr:  cmd.Worker.Addr,
+func (s *store) setWorker(data []byte) error {
+	var unmarshaled SetWorkerCommandData
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		return err
+	}
+
+	s.state[unmarshaled.WorkerId] = Worker{
+		Addr:  unmarshaled.Worker.Addr,
 		Tasks: make(map[uuid.UUID]task.Task),
 	}
-}
-
-func (s *store) removeWorker(cmd RemoveWorkerCommand) error {
-	if _, ok := s.state[cmd.WorkerId]; !ok {
-		return ErrWorkerNotFound
-	}
-
-	delete(s.state, cmd.WorkerId)
 	return nil
 }
 
-func (s *store) setTask(cmd SetTaskCommand) error {
-	worker, ok := s.state[cmd.WorkerId]
+func (s *store) removeWorker(data []byte) error {
+	var unmarshaled RemoveWorkerCommandData
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		return err
+	}
+
+	if _, ok := s.state[unmarshaled.WorkerId]; !ok {
+		return ErrWorkerNotFound
+	}
+
+	delete(s.state, unmarshaled.WorkerId)
+	return nil
+}
+
+func (s *store) setTask(data []byte) error {
+	var unmarshaled SetTaskCommandData
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		return err
+	}
+
+	worker, ok := s.state[unmarshaled.WorkerId]
 	if !ok {
 		return ErrWorkerNotFound
 	}
 
-	worker.Tasks[cmd.Task.Id] = cmd.Task
-	s.state[cmd.WorkerId] = worker
+	worker.Tasks[unmarshaled.Task.Id] = unmarshaled.Task
+	s.state[unmarshaled.WorkerId] = worker
 	return nil
 }

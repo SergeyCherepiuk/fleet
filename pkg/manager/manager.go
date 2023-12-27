@@ -1,9 +1,11 @@
 package manager
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	httpinternal "github.com/SergeyCherepiuk/fleet/internal/http"
 	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
 	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
@@ -46,33 +48,37 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 	go manager.watchMessagesQueue()
 	go manager.sendHeartbeats()
 
+	go manager.inspectStore()
+
 	return &manager
 }
 
-func (m *Manager) AddWorker(wid uuid.UUID, addr node.Addr) {
-	cmd := consensus.SetWorkerCommand{
-		Index:    m.store.LastIndex() + 1,
-		WorkerId: wid,
-		Worker: consensus.Worker{
-			Addr:  addr,
-			Tasks: make(map[uuid.UUID]task.Task),
-		},
+func (m *Manager) inspectStore() {
+	for {
+		for id, worker := range m.store.AllWorkers() {
+			fmt.Println(id, worker.Tasks)
+		}
+		time.Sleep(time.Second)
 	}
-	m.store.CommitChange(cmd) // Error is ignored (SetWorker command cannot return an error)
+}
 
-	// TODO(SergeyCherepiuk): Broadcast the command
+func (m *Manager) AddWorker(wid uuid.UUID, addr node.Addr) {
+	worker := consensus.Worker{
+		Addr:  addr,
+		Tasks: make(map[uuid.UUID]task.Task),
+	}
+	cmd := consensus.NewSetWorkerCommand(m.store.LastIndex()+1, wid, worker)
+	m.store.CommitChange(*cmd) // Error is ignored (SetWorker command cannot return an error)
+	m.broadcastCommands(*cmd)
 }
 
 func (m *Manager) RemoveWorker(wid uuid.UUID) error {
-	cmd := consensus.RemoveWorkerCommand{
-		Index:    m.store.LastIndex() + 1,
-		WorkerId: wid,
-	}
-	if _, err := m.store.CommitChange(cmd); err != nil {
+	cmd := consensus.NewRemoveWorkerCommand(m.store.LastIndex()+1, wid)
+	if _, err := m.store.CommitChange(*cmd); err != nil {
 		return err
 	}
 
-	// TODO(SergeyCherepiuk): Broadcast the command
+	m.broadcastCommands(*cmd)
 	return nil
 }
 
@@ -135,14 +141,13 @@ func (m *Manager) watchMessagesQueue() {
 
 		switch message.Task.State {
 		case task.Running, task.Finished, task.Failed:
-			cmd := consensus.SetTaskCommand{
-				Index:    m.store.LastIndex() + 1,
-				WorkerId: message.From,
-				Task:     message.Task,
-			}
-			m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
-
-			// TODO(SergeyCherepiuk): Broadcast the command
+			cmd := consensus.NewSetTaskCommand(
+				m.store.LastIndex()+1,
+				message.From,
+				message.Task,
+			)
+			m.store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
+			m.broadcastCommands(*cmd)
 		}
 
 		if message.Task.State == task.Restarting {
@@ -152,18 +157,15 @@ func (m *Manager) watchMessagesQueue() {
 	}
 }
 
+// TODO(SergeyCherepiuk): Heartbeats should check whether worker's store is synced
 func (m *Manager) sendHeartbeats() {
 	for {
 		for wid, worker := range m.store.AllWorkers() {
 			resp, err := httpclient.Get(worker.Addr.String(), "/heartbeat")
 			if err != nil || resp.StatusCode != http.StatusOK {
-				cmd := consensus.RemoveWorkerCommand{
-					Index:    m.store.LastIndex() + 1,
-					WorkerId: wid,
-				}
-				m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
-
-				// TODO(SergeyCherepiuk): Broadcast the command
+				cmd := consensus.NewRemoveWorkerCommand(m.store.LastIndex()+1, wid)
+				m.store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
+				m.broadcastCommands(*cmd)
 
 				for _, t := range worker.Tasks {
 					m.Run(t)
@@ -183,14 +185,9 @@ func (m *Manager) run(t task.Task) error {
 
 	t.State = task.Scheduled
 
-	cmd := consensus.SetTaskCommand{
-		Index:    m.store.LastIndex() + 1,
-		WorkerId: workerId,
-		Task:     t,
-	}
-	m.store.CommitChange(cmd) // TODO(SergeyCherepiuk): Handle the error
-
-	// TODO(SergeyCherepiuk): Broadcast the command
+	cmd := consensus.NewSetTaskCommand(m.store.LastIndex()+1, workerId, t)
+	m.store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
+	m.broadcastCommands(*cmd)
 
 	httpclient.Post(worker.Addr.String(), "/task/run", t)
 	return nil
@@ -221,4 +218,27 @@ func (m *Manager) scheduleRestart(t task.Task) {
 		t.Restarts = append(t.Restarts, time.Now())
 		m.run(t)
 	}()
+}
+
+func (m *Manager) broadcastCommands(cmds ...consensus.Command) {
+	for _, worker := range m.store.AllWorkers() {
+		go m.broadcastCommandsToWorker(worker.Addr, cmds...)
+	}
+}
+
+func (m *Manager) broadcastCommandsToWorker(addr node.Addr, cmds ...consensus.Command) {
+	resp, err := httpclient.Post(addr.String(), "/store/command", cmds)
+	if err != nil {
+		return
+	}
+
+	if resp.StatusCode == http.StatusCreated {
+		return
+	}
+
+	var offset int
+	httpinternal.Body(resp, &offset)
+
+	cmds = m.store.GetLastNCommands(offset)
+	m.broadcastCommandsToWorker(addr, cmds...)
 }

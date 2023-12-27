@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/labstack/echo/v4"
 )
@@ -57,6 +58,19 @@ func StartServer(addr string, worker *Worker) error {
 		}
 
 		return c.JSON(http.StatusOK, stat)
+	})
+
+	e.POST("/store/command", func(c echo.Context) error {
+		var cmds []consensus.Command
+		if err := c.Bind(&cmds); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err)
+		}
+
+		if off, err := worker.CommitChanges(cmds...); err != nil {
+			return c.JSON(http.StatusInternalServerError, off)
+		}
+
+		return c.NoContent(http.StatusCreated)
 	})
 
 	e.GET("/heartbeat", func(c echo.Context) error {

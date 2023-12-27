@@ -1,39 +1,54 @@
 package consensus
 
 import (
+	"encoding/json"
+
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
 )
 
-type Command interface {
-	GetIndex() int
+type CommandType string
+
+const (
+	SetWorker    CommandType = "SetWorker"
+	RemoveWorker CommandType = "RemoveWorker"
+	SetTask      CommandType = "SetTask"
+)
+
+type Command struct {
+	Index int
+	Type  CommandType
+	Data  []byte
 }
 
-type SetWorkerCommand struct {
-	Index    int
+func NewSetWorkerCommand(index int, workerId uuid.UUID, worker Worker) *Command {
+	data := SetWorkerCommandData{WorkerId: workerId, Worker: worker}
+	marshaled, _ := json.Marshal(data)
+	return &Command{Index: index, Type: SetWorker, Data: marshaled}
+}
+
+func NewRemoveWorkerCommand(index int, workerId uuid.UUID) *Command {
+	data := RemoveWorkerCommandData{WorkerId: workerId}
+	marshaled, _ := json.Marshal(data)
+	return &Command{Index: index, Type: RemoveWorker, Data: marshaled}
+}
+
+func NewSetTaskCommand(index int, workerId uuid.UUID, task task.Task) *Command {
+	data := SetTaskCommandData{WorkerId: workerId, Task: task}
+	marshaled, _ := json.Marshal(data)
+	return &Command{Index: index, Type: SetTask, Data: marshaled}
+}
+
+type SetWorkerCommandData struct {
 	WorkerId uuid.UUID
 	Worker   Worker
 }
 
-func (c SetWorkerCommand) GetIndex() int {
-	return c.Index
-}
-
-type RemoveWorkerCommand struct {
-	Index    int
+type RemoveWorkerCommandData struct {
 	WorkerId uuid.UUID
 }
 
-func (c RemoveWorkerCommand) GetIndex() int {
-	return c.Index
-}
-
-type SetTaskCommand struct {
-	Index    int
+type SetTaskCommandData struct {
 	WorkerId uuid.UUID
 	Task     task.Task
-}
-
-func (c SetTaskCommand) GetIndex() int {
-	return c.Index
 }
