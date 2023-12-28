@@ -33,7 +33,7 @@ func labelFilter() filters.Args {
 
 func toFleetContainer(dockerContainer types.Container) container.Container {
 	return container.Container{
-		ID: dockerContainer.ID,
+		Id: dockerContainer.ID,
 		Image: image.Image{
 			ID:  dockerContainer.ImageID,
 			Ref: dockerContainer.Image,

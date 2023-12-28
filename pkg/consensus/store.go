@@ -84,7 +84,7 @@ func (s *store) Size() int {
 
 func (s *store) LastIndex() int {
 	if s.Size() == 0 {
-		return -1
+		return 0
 	}
 	return s.log[len(s.log)-1].Index
 }

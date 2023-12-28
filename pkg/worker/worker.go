@@ -28,17 +28,22 @@ const (
 // running containers to make sure none of the task failed
 type Worker struct {
 	Id           uuid.UUID
-	node         node.Node
+	Node         node.Node
 	runtime      c14n.Runtime
 	store        consensus.Store
 	managerAddr  string
 	shutdownCmds queue.Queue[*exec.Cmd]
 }
 
+type Message struct {
+	From uuid.UUID
+	Task task.Task
+}
+
 func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 	worker := &Worker{
 		Id:           uuid.New(),
-		node:         node,
+		Node:         node,
 		runtime:      runtime,
 		store:        consensus.NewLocalStore(),
 		managerAddr:  managerAddr,
@@ -50,47 +55,36 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 	go worker.spawnShutdownProcesses()
 	go worker.catchInterrupt()
 
-	go worker.inspectStore()
-
 	return worker
 }
 
-func (w *Worker) inspectStore() {
-	for {
-		for id, worker := range w.store.AllWorkers() {
-			fmt.Println(id, worker.Tasks)
-		}
-		time.Sleep(time.Second)
-	}
-}
-
-func (w *Worker) Run(ctx context.Context, t *task.Task) error {
+func (w *Worker) Run(ctx context.Context, t task.Task) error {
 	defer func() {
 		t.StartedAt = time.Now()
-		message := Message{From: w.Id, Task: *t}
+		message := Message{From: w.Id, Task: t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
 
-	id, err := w.runtime.Run(ctx, t.Container)
+	id, err := w.runtime.CreateAndRun(ctx, t.Container)
 	if err != nil {
-		t.State = task.Failed
+		t.State = task.FailedOnStartup
 		return err
 	}
 
-	t.Container.ID = id
+	t.Container.Id = id
 	t.State = task.Running
 	return nil
 }
 
-func (w *Worker) Finish(ctx context.Context, t *task.Task) error {
+func (w *Worker) Finish(ctx context.Context, t task.Task) error {
 	defer func() {
 		t.FinishedAt = time.Now()
-		message := Message{From: w.Id, Task: *t}
+		message := Message{From: w.Id, Task: t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
 
-	if err := w.runtime.Stop(ctx, t.Container); err != nil {
-		t.State = task.Failed
+	if err := w.runtime.StopAndRemove(ctx, t.Container.Id); err != nil {
+		t.State = task.FailedAfterStartup
 		return err
 	}
 
@@ -122,27 +116,68 @@ func (w *Worker) CancleShutdown() error {
 
 func (w *Worker) register() error {
 	endpoint := fmt.Sprintf("/worker/%s", w.Id)
-	_, err := httpclient.Post(w.managerAddr, endpoint, w.node.Addr)
+	_, err := httpclient.Post(w.managerAddr, endpoint, w.Node.Addr)
 	return err
 }
 
+func mapState(state container.State) task.State {
+	switch state {
+	case container.State{Status: "created", ExitCode: 0},
+		container.State{Status: "running", ExitCode: 0},
+		container.State{Status: "restarting", ExitCode: 0}:
+		return task.Running
+
+	case container.State{Status: "paused", ExitCode: 0},
+		container.State{Status: "exited", ExitCode: 0},
+		container.State{Status: "removing", ExitCode: 0}:
+		return task.Finished
+
+	default:
+		return task.FailedAfterStartup
+	}
+}
+
 func (w *Worker) inspectTasks() {
+	ctx := context.Background()
 	for {
-		ctx := context.Background()
 		containers, err := w.runtime.Containers(ctx)
 		if err != nil {
 			continue
 		}
 
-		containerIdsToStates := make(map[string]string)
+		containerIdsToStates := make(map[string]task.State)
 		for _, container := range containers {
-			state, _ := w.runtime.ContainerState(ctx, container.ID)
-			containerIdsToStates[container.ID] = state
+			state, _ := w.runtime.ContainerState(ctx, container.Id)
+			containerIdsToStates[container.Id] = mapState(state)
 		}
 
-		// TODO(SergeyCherepiuk): After worker will also own its copy of the registry
-		// compute the difference between desired and actual states and report is to the manager
+		worker, err := w.store.GetWorker(w.Id)
+		if err != nil {
+			continue
+		}
 
+		for _, t := range worker.Tasks {
+			actualState, ok := containerIdsToStates[t.Container.Id]
+			if !ok && t.State == task.Running {
+				t.State = task.FailedAfterStartup
+				message := Message{From: w.Id, Task: t}
+				httpclient.Post(w.managerAddr, "/worker/message", message)
+			}
+
+			if !ok {
+				continue
+			}
+
+			if t.State != actualState {
+				t.State = actualState
+				message := Message{From: w.Id, Task: t}
+				httpclient.Post(w.managerAddr, "/worker/message", message)
+			}
+
+			if actualState == task.Finished || actualState.Fail() {
+				w.runtime.StopAndRemove(ctx, t.Container.Id)
+			}
+		}
 		time.Sleep(InspectInterval)
 	}
 }
@@ -177,6 +212,6 @@ func (w *Worker) catchInterrupt() {
 	}
 
 	for _, container := range containers {
-		w.runtime.Stop(ctx, container)
+		w.runtime.StopAndRemove(ctx, container.Id)
 	}
 }

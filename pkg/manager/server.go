@@ -43,6 +43,19 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusOK)
 	})
 
+	workerGroup.POST("/event", func(c echo.Context) error {
+		var event task.Event
+		if err := c.Bind(&event); err != nil {
+			return echo.NewHTTPError(
+				http.StatusBadRequest,
+				fmt.Errorf("invalid message format: %w", err),
+			)
+		}
+
+		manager.EventsQueue.Enqueue(event)
+		return c.NoContent(http.StatusCreated)
+	})
+
 	workerGroup.POST("/message", func(c echo.Context) error {
 		var message worker.Message
 		if err := c.Bind(&message); err != nil {
@@ -52,7 +65,7 @@ func StartServer(addr string, manager *Manager) error {
 			)
 		}
 
-		manager.messagesQueue.Enqueue(message)
+		manager.WorkerMessagesQueue.Enqueue(message)
 		return c.NoContent(http.StatusCreated)
 	})
 
@@ -65,13 +78,20 @@ func StartServer(addr string, manager *Manager) error {
 			)
 		}
 
-		manager.Run(t)
+		event := task.Event{Task: t, Desired: task.Running}
+		manager.EventsQueue.Enqueue(event)
 		return c.NoContent(http.StatusCreated)
 	})
 
 	e.POST("/task/stop/:id", func(c echo.Context) error {
 		id := c.Get("id").(uuid.UUID)
-		manager.Stop(id)
+		t, err := manager.Store.GetTask(id)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, err)
+		}
+
+		event := task.Event{Task: t, Desired: task.Finished}
+		manager.EventsQueue.Enqueue(event)
 		return c.NoContent(http.StatusCreated)
 	}, parseId)
 

@@ -24,7 +24,7 @@ func StartServer(addr string, worker *Worker) error {
 		}
 
 		ctx := context.Background()
-		if err := worker.Run(ctx, &t); err != nil {
+		if err := worker.Run(ctx, t); err != nil {
 			c.JSON(http.StatusInternalServerError, t)
 		}
 
@@ -41,7 +41,7 @@ func StartServer(addr string, worker *Worker) error {
 		}
 
 		ctx := context.Background()
-		if err := worker.Finish(ctx, &t); err != nil {
+		if err := worker.Finish(ctx, t); err != nil {
 			return c.JSON(http.StatusInternalServerError, t)
 		}
 
@@ -49,7 +49,7 @@ func StartServer(addr string, worker *Worker) error {
 	})
 
 	e.GET("/stat", func(c echo.Context) error {
-		stat, err := worker.node.Resources()
+		stat, err := worker.Node.Resources()
 		if err != nil {
 			return echo.NewHTTPError(
 				http.StatusInternalServerError,

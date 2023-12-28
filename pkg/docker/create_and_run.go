@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func (r *Runtime) Run(ctx context.Context, container container.Container) (string, error) {
+func (r *Runtime) CreateAndRun(ctx context.Context, container container.Container) (string, error) {
 	if err := r.pullImage(ctx, container.Image); err != nil {
 		return "", err
 	}

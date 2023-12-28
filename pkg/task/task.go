@@ -9,13 +9,19 @@ import (
 
 type State string
 
+func (s State) Fail() bool {
+	return s == FailedOnStartup || s == FailedAfterStartup
+}
+
 const (
-	Pending    State = "pending"
-	Scheduled  State = "scheduled"
-	Running    State = "running"
-	Finished   State = "finished"
-	Failed     State = "failed"
-	Restarting State = "restarting"
+	Pending               State = "Pending"
+	Scheduled             State = "Scheduled"
+	Running               State = "Running"
+	Finished              State = "Finished"
+	FailedOnStartup       State = "FailedOnStartup"
+	FailedAfterStartup    State = "FailedAfterStartup"
+	RestartingImmediately State = "RestartingImmediately"
+	RestartingWithBackOff State = "RestartingWithBackOff"
 )
 
 type Task struct {

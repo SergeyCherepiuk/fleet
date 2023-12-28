@@ -3,17 +3,23 @@ package docker
 import (
 	"context"
 	"errors"
+
+	"github.com/SergeyCherepiuk/fleet/pkg/container"
 )
 
-func (r *Runtime) ContainerState(ctx context.Context, containerId string) (string, error) {
-	json, err := r.Client.ContainerInspect(ctx, containerId)
+func (r *Runtime) ContainerState(ctx context.Context, id string) (container.State, error) {
+	json, err := r.Client.ContainerInspect(ctx, id)
 	if err != nil {
-		return "", err
+		return container.State{}, err
 	}
 
 	if json.State == nil {
-		return "", errors.New("container's state is nil")
+		return container.State{}, errors.New("container's state is nil")
 	}
 
-	return json.State.Status, nil
+	state := container.State{
+		Status:   json.State.Status,
+		ExitCode: json.State.ExitCode,
+	}
+	return state, nil
 }
