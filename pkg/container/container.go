@@ -47,7 +47,7 @@ const (
 
 type RequiredResources struct {
 	CPU    float64
-	Memory int64
+	Memory uint64
 }
 
 type State struct {

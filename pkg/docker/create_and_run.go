@@ -49,7 +49,7 @@ func (r *Runtime) createContainer(ctx context.Context, cont container.Container)
 	hostConfig := apicontainer.HostConfig{
 		PortBindings: portMap(cont.Config.ExposedPorts),
 		Resources: apicontainer.Resources{
-			Memory:   cont.Config.RequiredResources.Memory,
+			Memory:   int64(cont.Config.RequiredResources.Memory),
 			NanoCPUs: int64(cont.Config.RequiredResources.CPU * math.Pow(10, 9)),
 		},
 	}

@@ -13,6 +13,7 @@ var ManagerCmd = &cobra.Command{
 }
 
 func managerRun(_ *cobra.Command, _ []string) error {
-	manager := manager.New(Node, &scheduler.RoundRobin{})
+	scheduler := scheduler.NewEpvm(scheduler.EpvmStrategyBestFit)
+	manager := manager.New(Node, scheduler)
 	return backend.StartServer(Node.Addr.String(), manager)
 }

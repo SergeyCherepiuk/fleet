@@ -92,15 +92,19 @@ func (m *Manager) watchEventsQueue() {
 
 		switch event.Desired {
 		case task.Running:
-			m.run(event.Task)
+			err = m.run(event.Task)
 		case task.Finished:
-			m.finish(event.Task)
+			err = m.finish(event.Task)
 		case task.RestartingImmediately:
 			m.restart(event.Task)
 		case task.RestartingWithBackOff:
 			// TODO(SergeyCherepiuk): Disregard number of restarts if task is
 			// running successfully long enough
 			m.scheduleRestart(event.Task)
+		}
+
+		if err != nil {
+			m.EventsQueue.Enqueue(event)
 		}
 	}
 }
@@ -128,6 +132,8 @@ func (m *Manager) watchWorkerMessageQueue() {
 					restartMethod = task.RestartingImmediately
 				}
 
+				// TODO(SergeyCherepiuk): When the task restarts on the other worker
+				// its record is still present in the store for the previous worker
 				t.State = restartMethod
 				event := task.Event{Task: t, Desired: restartMethod}
 				m.EventsQueue.Enqueue(event)

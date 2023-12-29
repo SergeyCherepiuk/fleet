@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-var ErrNoWorkersAvailable = errors.New("no workers available")
+var (
+	ErrNoAvailableWorkers = errors.New("no available workers")
+	ErrNoCapableWorkers   = errors.New("no capable workers")
+)
 
 type Scheduler interface {
 	SelectWorker(task task.Task, workers map[uuid.UUID]consensus.Worker) (uuid.UUID, consensus.Worker, error)

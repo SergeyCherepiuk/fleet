@@ -48,8 +48,8 @@ func StartServer(addr string, worker *Worker) error {
 		return c.JSON(http.StatusOK, t)
 	})
 
-	e.GET("/stat", func(c echo.Context) error {
-		stat, err := worker.Node.Resources()
+	e.GET("/resources/available", func(c echo.Context) error {
+		resources, err := worker.AvailableResources()
 		if err != nil {
 			return echo.NewHTTPError(
 				http.StatusInternalServerError,
@@ -57,7 +57,7 @@ func StartServer(addr string, worker *Worker) error {
 			)
 		}
 
-		return c.JSON(http.StatusOK, stat)
+		return c.JSON(http.StatusOK, resources)
 	})
 
 	e.POST("/store/command", func(c echo.Context) error {

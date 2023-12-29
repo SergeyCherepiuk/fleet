@@ -24,8 +24,6 @@ const (
 	ShutdownTimeoutSeconds = 5
 )
 
-// TODO(SergeyCherepiuk): Worker should periodically query the list of
-// running containers to make sure none of the task failed
 type Worker struct {
 	Id           uuid.UUID
 	Node         node.Node
@@ -112,6 +110,37 @@ func (w *Worker) CancleShutdown() error {
 	}
 
 	return exec.Command("kill", "-9", fmt.Sprint(cmd.Process.Pid)).Run()
+}
+
+func (w *Worker) AvailableResources() (node.Resources, error) {
+	availableResources, err := w.Node.Resources()
+	if err != nil {
+		return node.Resources{}, err
+	}
+
+	declaredResources, err := w.DeclaredResources()
+	if err != nil {
+		return node.Resources{}, err
+	}
+
+	availableResources.Memory.Available -= declaredResources.Memory
+	return availableResources, nil
+}
+
+func (w *Worker) DeclaredResources() (container.RequiredResources, error) {
+	worker, err := w.store.GetWorker(w.Id)
+	if err != nil {
+		return container.RequiredResources{}, err
+	}
+
+	var resources container.RequiredResources
+	for _, t := range worker.Tasks {
+		if t.State == task.Running {
+			resources.CPU += t.Container.Config.RequiredResources.CPU
+			resources.Memory += t.Container.Config.RequiredResources.Memory
+		}
+	}
+	return resources, nil
 }
 
 func (w *Worker) register() error {
