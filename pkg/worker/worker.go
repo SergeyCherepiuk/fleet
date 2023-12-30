@@ -113,21 +113,25 @@ func (w *Worker) CancleShutdown() error {
 }
 
 func (w *Worker) AvailableResources() (node.Resources, error) {
-	availableResources, err := w.Node.Resources()
+	workerResources, err := w.Node.Resources()
 	if err != nil {
 		return node.Resources{}, err
 	}
 
-	declaredResources, err := w.DeclaredResources()
+	reservedResources, err := w.ReservedResources()
 	if err != nil {
 		return node.Resources{}, err
 	}
 
-	availableResources.Memory.Available -= declaredResources.Memory
-	return availableResources, nil
+	availableMemory := min(
+		workerResources.Memory.Available,
+		workerResources.Memory.Total-reservedResources.Memory,
+	)
+	workerResources.Memory.Available = max(availableMemory, 0)
+	return workerResources, nil
 }
 
-func (w *Worker) DeclaredResources() (container.RequiredResources, error) {
+func (w *Worker) ReservedResources() (container.RequiredResources, error) {
 	worker, err := w.store.GetWorker(w.Id)
 	if err != nil {
 		return container.RequiredResources{}, err
