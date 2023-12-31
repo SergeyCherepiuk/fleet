@@ -15,3 +15,7 @@ func New() (*Runtime, error) {
 	}
 	return &Runtime{Client: client}, nil
 }
+
+func (r *Runtime) Name() string {
+	return "docker"
+}

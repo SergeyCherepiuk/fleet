@@ -90,6 +90,27 @@ func (w *Worker) Finish(ctx context.Context, t task.Task) error {
 	return nil
 }
 
+type Info struct {
+	Id          uuid.UUID
+	Addr        node.Addr
+	ManagerAddr string
+	TasksCount  int
+	RuntimeName string
+}
+
+func (w *Worker) Info() *Info {
+	workerFromStore, _ := w.store.GetWorker(w.Id)
+	tasksCount := len(workerFromStore.Tasks)
+
+	return &Info{
+		Id:          w.Id,
+		Addr:        w.Node.Addr,
+		ManagerAddr: w.managerAddr,
+		TasksCount:  tasksCount,
+		RuntimeName: w.runtime.Name(),
+	}
+}
+
 func (w *Worker) CommitChanges(cmds ...consensus.Command) (int, error) {
 	for _, cmd := range cmds {
 		if off, err := w.store.CommitChange(cmd); err != nil {

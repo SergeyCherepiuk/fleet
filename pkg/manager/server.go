@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
+	httpinternal "github.com/SergeyCherepiuk/fleet/internal/http"
+	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/SergeyCherepiuk/fleet/pkg/worker"
@@ -69,6 +71,25 @@ func StartServer(addr string, manager *Manager) error {
 		return c.NoContent(http.StatusCreated)
 	})
 
+	workerGroup.GET("/list", func(c echo.Context) error {
+		workers := manager.Store.AllWorkers()
+		infos := make([]worker.Info, 0, len(workers))
+		for _, w := range workers {
+			resp, err := httpclient.Get(w.Addr.String(), "/info")
+			if err != nil {
+				continue
+			}
+
+			var info worker.Info
+			if err := httpinternal.Body(resp, &info); err != nil {
+				continue
+			}
+
+			infos = append(infos, info)
+		}
+		return c.JSON(http.StatusOK, infos)
+	})
+
 	e.POST("/task/run", func(c echo.Context) error {
 		var t task.Task
 		if err := c.Bind(&t); err != nil {
@@ -97,6 +118,10 @@ func StartServer(addr string, manager *Manager) error {
 
 	e.GET("/task/list", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, manager.Tasks())
+	})
+
+	e.GET("/task/list/pending", func(c echo.Context) error {
+		return c.JSON(http.StatusOK, manager.EventsQueue.GetAll())
 	})
 
 	return e.Start(addr)

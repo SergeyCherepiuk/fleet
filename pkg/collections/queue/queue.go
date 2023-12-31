@@ -48,3 +48,9 @@ func (q *Queue[T]) Dequeue() (T, error) {
 	q.buf = q.buf[1:]
 	return value, nil
 }
+
+func (q *Queue[T]) GetAll() []T {
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	return q.buf
+}

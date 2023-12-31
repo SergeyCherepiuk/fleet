@@ -7,6 +7,7 @@ import (
 )
 
 type Runtime interface {
+	Name() string
 	CreateAndRun(context.Context, container.Container) (id string, err error)
 	StopAndRemove(ctx context.Context, id string) error
 	Containers(context.Context) ([]container.Container, error)
