@@ -120,6 +120,11 @@ func StartServer(addr string, manager *Manager) error {
 		return c.JSON(http.StatusOK, manager.Tasks())
 	})
 
+	e.GET("/task/list/:id", func(c echo.Context) error {
+		id := c.Get("id").(uuid.UUID)
+		return c.JSON(http.StatusOK, manager.WorkerTasks(id))
+	}, parseId)
+
 	e.GET("/task/list/pending", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, manager.EventsQueue.GetAll())
 	})

@@ -11,18 +11,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type WorkerCmdOptions struct {
-	managerAddr string
-}
-
 var (
 	WorkerCmd = &cobra.Command{
 		Use:     "worker",
 		PreRunE: workerPreRun,
 		RunE:    workerRun,
 	}
-	workerCmdOptions WorkerCmdOptions
-	workerRuntime    c14n.Runtime
+
+	workerCmdOptions struct {
+		managerAddr string
+	}
+
+	workerRuntime c14n.Runtime
 )
 
 func init() {

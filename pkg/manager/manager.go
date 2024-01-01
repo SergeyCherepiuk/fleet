@@ -70,12 +70,20 @@ func (m *Manager) RemoveWorker(wid uuid.UUID) error {
 	return nil
 }
 
-func (m *Manager) Tasks() map[uuid.UUID][]task.Task {
-	stat := make(map[uuid.UUID][]task.Task)
-	for id, workerEntry := range m.Store.AllWorkers() {
-		stat[id] = maps.Values(workerEntry.Tasks)
+func (m *Manager) WorkerTasks(wid uuid.UUID) []task.Task {
+	w, err := m.Store.GetWorker(wid)
+	if err != nil {
+		return make([]task.Task, 0)
 	}
-	return stat
+	return maps.Values(w.Tasks)
+}
+
+func (m *Manager) Tasks() []task.Task {
+	tasks := make([]task.Task, 0)
+	for _, worker := range m.Store.AllWorkers() {
+		tasks = append(tasks, maps.Values(worker.Tasks)...)
+	}
+	return tasks
 }
 
 func (m *Manager) watchEventsQueue() {
