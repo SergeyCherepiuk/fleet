@@ -1,7 +1,12 @@
 package cmd
 
 import (
+	"context"
+
+	cmdcontext "github.com/SergeyCherepiuk/fleet/cli/cmd/context"
+	"github.com/SergeyCherepiuk/fleet/cli/cmd/manager"
 	"github.com/SergeyCherepiuk/fleet/cli/cmd/task"
+	"github.com/SergeyCherepiuk/fleet/cli/cmd/worker"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/spf13/cobra"
 )
@@ -11,28 +16,29 @@ var (
 		Use:               "fleet",
 		PersistentPreRunE: rootPreRun,
 	}
-	Node node.Node
 )
 
 func init() {
-	RootCmd.AddCommand(ManagerCmd)
-	RootCmd.AddCommand(WorkerCmd)
+	RootCmd.AddCommand(manager.ManagerCmd)
+	RootCmd.AddCommand(worker.WorkerCmd)
 	RootCmd.AddCommand(task.TaskCmd)
 }
 
-func rootPreRun(_ *cobra.Command, _ []string) error {
-	ip, err := Node.LocalIPv4()
+func rootPreRun(cmd *cobra.Command, _ []string) error {
+	ip, err := node.LocalIPv4()
 	if err != nil {
 		return err
 	}
 
-	port, err := Node.RandomPort()
+	port, err := node.RandomPort()
 	if err != nil {
 		return err
 	}
 
-	Node = node.Node{
+	n := node.Node{
 		Addr: node.Addr{Addr: ip, Port: port},
 	}
+	ctx := context.WithValue(cmd.Context(), cmdcontext.NodeKey, n)
+	cmd.SetContext(ctx)
 	return nil
 }

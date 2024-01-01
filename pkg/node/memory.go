@@ -17,7 +17,7 @@ type MemoryStat struct {
 
 var errMemoryStat = MemoryStat{Total: 0, Available: 0}
 
-func (*Node) Memory() (MemoryStat, error) {
+func Memory() (MemoryStat, error) {
 	file, err := os.Open("/proc/meminfo")
 	if err != nil {
 		return errMemoryStat, err

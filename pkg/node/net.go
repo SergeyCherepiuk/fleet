@@ -7,7 +7,7 @@ import (
 
 var ErrIPv4NotFound = errors.New("no ipv4 interface")
 
-func (*Node) LocalIPv4() (net.IP, error) {
+func LocalIPv4() (net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return net.IP{}, err
@@ -23,7 +23,7 @@ func (*Node) LocalIPv4() (net.IP, error) {
 	return net.IP{}, ErrIPv4NotFound
 }
 
-func (*Node) RandomPort() (uint16, error) {
+func RandomPort() (uint16, error) {
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
 		return 0, err

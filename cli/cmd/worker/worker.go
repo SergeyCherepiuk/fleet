@@ -1,11 +1,12 @@
-package cmd
+package worker
 
 import (
 	"errors"
 
+	"github.com/SergeyCherepiuk/fleet/cli/cmd/context"
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/docker"
-	"github.com/SergeyCherepiuk/fleet/pkg/worker"
+	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	backend "github.com/SergeyCherepiuk/fleet/pkg/worker"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,7 @@ var (
 
 func init() {
 	WorkerCmd.PersistentFlags().StringVar(&workerCmdOptions.managerAddr, "manager", "", "Address and port of the manager node")
+	WorkerCmd.AddCommand(ListCmd)
 }
 
 func workerPreRun(_ *cobra.Command, _ []string) error {
@@ -38,7 +40,8 @@ func workerPreRun(_ *cobra.Command, _ []string) error {
 	return err
 }
 
-func workerRun(_ *cobra.Command, _ []string) error {
-	worker := worker.New(Node, workerRuntime, workerCmdOptions.managerAddr)
-	return backend.StartServer(Node.Addr.String(), worker)
+func workerRun(cmd *cobra.Command, _ []string) error {
+	n := cmd.Context().Value(context.NodeKey).(node.Node)
+	worker := backend.New(n, workerRuntime, workerCmdOptions.managerAddr)
+	return backend.StartServer(n.Addr.String(), worker)
 }

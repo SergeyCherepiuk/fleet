@@ -28,10 +28,10 @@ type Resources struct {
 func (n Node) Resources() (Resources, error) {
 	var err error
 
-	memstat, e := n.Memory()
+	memstat, e := Memory()
 	err = errors.Join(err, e)
 
-	cpustat, e := n.CPU(100 * time.Millisecond)
+	cpustat, e := CPU(100 * time.Millisecond)
 	err = errors.Join(err, e)
 
 	stat := Resources{Memory: memstat, CPU: cpustat}

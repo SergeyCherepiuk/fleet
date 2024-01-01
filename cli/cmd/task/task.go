@@ -22,7 +22,6 @@ func init() {
 	TaskCmd.PersistentFlags().StringVar(&taskCmdOptions.managerAddr, "manager", "", "Address and port of the manager node")
 	TaskCmd.AddCommand(RunCmd)
 	TaskCmd.AddCommand(StopCmd)
-	TaskCmd.AddCommand(ListCmd)
 }
 
 func taskPreRun(_ *cobra.Command, _ []string) error {

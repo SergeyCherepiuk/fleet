@@ -21,7 +21,7 @@ var ErrNoCoresAvailable = errors.New("no cpu info available")
 
 var errCPUStat = CPUStat{Cores: 0, Usage: 100.0}
 
-func (*Node) CPU(interval time.Duration) (CPUStat, error) {
+func CPU(interval time.Duration) (CPUStat, error) {
 	stats := make([]map[string]uint64, 2)
 	var cores uint
 

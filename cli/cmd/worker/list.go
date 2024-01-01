@@ -1,4 +1,4 @@
-package task
+package worker
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var ListCmd = &cobra.Command{
 }
 
 func listRun(_ *cobra.Command, _ []string) error {
-	resp, err := httpclient.Get(taskCmdOptions.managerAddr, "/worker/list")
+	resp, err := httpclient.Get(workerCmdOptions.managerAddr, "/worker/list")
 	if err != nil {
 		return err
 	}
