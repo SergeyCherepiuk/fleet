@@ -2,52 +2,63 @@ package format
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
+
+	"golang.org/x/exp/maps"
 )
 
 type AccessMap[T any] map[string]func(T) any
 
+func (am AccessMap[T]) HasAllHeaders(headers []string) bool {
+	headersCopy := make([]string, len(headers))
+	copy(headersCopy, headers)
+	sort.Strings(headersCopy)
+
+	accessMapKeys := maps.Keys(am)
+	sort.Strings(accessMapKeys)
+
+	return slices.Equal(headersCopy, accessMapKeys)
+}
+
 func Table[T any](headers []string, accessMap AccessMap[T], data []T) string {
-	// TODO (SergeyCherepiuk): The check should be improved
-	if len(headers) == 0 || len(headers) != len(accessMap) {
+	if len(headers) == 0 || !accessMap.HasAllHeaders(headers) {
 		return ""
 	}
 
 	var (
-		values             = make(map[string][]string, len(headers))
-		maxLengths         = make(map[string]int, len(headers))
-		headersWithPadding = make([]string, 0, len(headers))
+		columns    = make([][]string, len(headers))
+		maxLengths = make(map[string]int, len(headers))
 	)
 
-	for _, header := range headers {
-		columnValues := make([]string, 0, len(data))
+	for i := range headers {
+		columns[i] = make([]string, 0, len(data)+1)
+	}
+
+	for i, header := range headers {
+		columns[i] = append(columns[i], header)
 		access := accessMap[header]
 		for _, d := range data {
 			value := fmt.Sprint(access(d))
-			columnValues = append(columnValues, value)
+			columns[i] = append(columns[i], value)
 		}
-		values[header] = columnValues
 
-		column := append([]string{header}, values[header]...)
-		maxLengths[header] = maxLength(column)
+		maxLengths[header] = maxLength(columns[i])
 
-		m := maxLengths[header]
-		headerWithPadding := header + strings.Repeat(" ", m-len(header))
-		headersWithPadding = append(headersWithPadding, headerWithPadding)
-		for i, value := range values[header] {
-			values[header][i] = value + strings.Repeat(" ", m-len(value))
+		maxLength := maxLengths[header]
+		for j, value := range columns[i] {
+			paddingSize := maxLength - len(value)
+			columns[i][j] = value + strings.Repeat(" ", paddingSize)
 		}
 	}
 
 	var builder strings.Builder
 
-	builder.WriteString(strings.Join(headersWithPadding, "  "))
-	builder.WriteByte('\n')
-
-	for i := 0; i < len(values[headers[0]]); i++ {
+	for i := 0; i < len(data)+1; i++ {
 		row := make([]string, 0, len(headers))
-		for _, header := range headers {
-			row = append(row, values[header][i])
+		for j := 0; j < len(headers); j++ {
+			row = append(row, columns[j][i])
 		}
 
 		builder.WriteString(strings.Join(row, "  "))
