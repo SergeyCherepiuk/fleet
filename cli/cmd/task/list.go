@@ -3,12 +3,14 @@ package task
 import (
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	httpinternal "github.com/SergeyCherepiuk/fleet/internal/http"
 	"github.com/SergeyCherepiuk/fleet/pkg/format"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
@@ -41,8 +43,8 @@ func listRun(_ *cobra.Command, _ []string) error {
 
 	headers := []string{"TASK ID", "IMAGE", "STATE", "RESTARTS", "START TIME", "FINISH TIME"}
 	accessMap := format.AccessMap[task.Task]{
-		"TASK ID":     func(t task.Task) any { return t.Id },
-		"IMAGE":       func(t task.Task) any { return t.Container.Image.Ref },
+		"TASK ID":     func(t task.Task) any { return formatId(t.Id) },
+		"IMAGE":       func(t task.Task) any { return trimImageRef(t.Container.Image.Ref) },
 		"STATE":       func(t task.Task) any { return t.State },
 		"RESTARTS":    func(t task.Task) any { return len(t.Restarts) },
 		"START TIME":  func(t task.Task) any { return formatTime(t.StartedAt) },
@@ -50,6 +52,21 @@ func listRun(_ *cobra.Command, _ []string) error {
 	}
 	fmt.Print(format.Table[task.Task](headers, accessMap, tasks))
 	return nil
+}
+
+func formatId(id uuid.UUID) string {
+	if id == uuid.Nil {
+		return "-"
+	}
+	return id.String()
+}
+
+func trimImageRef(ref string) string {
+	index := strings.LastIndexByte(ref, '/')
+	if index == -1 || index == len(ref)-1 {
+		return ref
+	}
+	return ref[index+1:]
 }
 
 func formatTime(t time.Time) string {

@@ -117,17 +117,21 @@ func StartServer(addr string, manager *Manager) error {
 	}, parseId)
 
 	e.GET("/task/list", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, manager.Tasks())
+		events := manager.EventsQueue.GetAll()
+		fmt.Println(events)
+		pendingTasks := make([]task.Task, 0, len(events))
+		for _, event := range events {
+			pendingTasks = append(pendingTasks, event.Task)
+		}
+
+		tasks := append(manager.Tasks(), pendingTasks...)
+		return c.JSON(http.StatusOK, tasks)
 	})
 
 	e.GET("/task/list/:id", func(c echo.Context) error {
 		id := c.Get("id").(uuid.UUID)
 		return c.JSON(http.StatusOK, manager.WorkerTasks(id))
 	}, parseId)
-
-	e.GET("/task/list/pending", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, manager.EventsQueue.GetAll())
-	})
 
 	return e.Start(addr)
 }
