@@ -3,7 +3,9 @@ package consensus
 import (
 	"encoding/json"
 	"errors"
+	"sync"
 
+	mapsinternal "github.com/SergeyCherepiuk/fleet/internal/maps"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
@@ -29,7 +31,10 @@ var (
 )
 
 type store struct {
-	state map[uuid.UUID]Worker
+	muState sync.RWMutex
+	state   map[uuid.UUID]Worker
+
+	muLog sync.RWMutex
 	log   []Command
 }
 
@@ -46,10 +51,20 @@ type Worker struct {
 }
 
 func (s *store) AllWorkers() map[uuid.UUID]Worker {
-	return s.state
+	s.muState.RLock()
+	defer s.muState.RUnlock()
+
+	c := make(map[uuid.UUID]Worker, len(s.state))
+	for k, v := range s.state {
+		c[k] = v
+	}
+	return c
 }
 
 func (s *store) GetTask(tid uuid.UUID) (task.Task, error) {
+	s.muState.RLock()
+	defer s.muState.RUnlock()
+
 	for _, worker := range s.state {
 		if task, ok := worker.Tasks[tid]; ok {
 			return task, nil
@@ -59,6 +74,9 @@ func (s *store) GetTask(tid uuid.UUID) (task.Task, error) {
 }
 
 func (s *store) GetWorker(wid uuid.UUID) (Worker, error) {
+	s.muState.RLock()
+	defer s.muState.RUnlock()
+
 	if worker, ok := s.state[wid]; ok {
 		return worker, nil
 	}
@@ -66,6 +84,9 @@ func (s *store) GetWorker(wid uuid.UUID) (Worker, error) {
 }
 
 func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
+	s.muState.RLock()
+	defer s.muState.RUnlock()
+
 	for id, worker := range s.state {
 		if _, ok := worker.Tasks[tid]; ok {
 			return id, worker, nil
@@ -75,10 +96,17 @@ func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
 }
 
 func (s *store) GetLastNCommands(n int) []Command {
-	return s.log[len(s.log)-n:]
+	s.muLog.RLock()
+	defer s.muLog.RUnlock()
+
+	c := make([]Command, n)
+	copy(c, s.log[len(s.log)-n:])
+	return c
 }
 
 func (s *store) Size() int {
+	s.muState.RLock()
+	defer s.muState.RUnlock()
 	return len(s.state)
 }
 
@@ -86,6 +114,9 @@ func (s *store) LastIndex() int {
 	if s.Size() == 0 {
 		return 0
 	}
+
+	s.muLog.RLock()
+	defer s.muLog.RUnlock()
 	return s.log[len(s.log)-1].Index
 }
 
@@ -110,6 +141,8 @@ func (s *store) CommitChange(cmd Command) (int, error) {
 		return 0, err
 	}
 
+	s.muLog.Lock()
+	defer s.muLog.Unlock()
 	s.log = append(s.log, cmd)
 	return 0, nil
 }
@@ -119,6 +152,9 @@ func (s *store) setWorker(data []byte) error {
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		return err
 	}
+
+	s.muState.Lock()
+	defer s.muState.Unlock()
 
 	s.state[unmarshaled.WorkerId] = Worker{
 		Addr:  unmarshaled.Worker.Addr,
@@ -132,6 +168,9 @@ func (s *store) removeWorker(data []byte) error {
 	if err := json.Unmarshal(data, &unmarshaled); err != nil {
 		return err
 	}
+
+	s.muState.Lock()
+	defer s.muState.Unlock()
 
 	if _, ok := s.state[unmarshaled.WorkerId]; !ok {
 		return ErrWorkerNotFound
@@ -147,12 +186,17 @@ func (s *store) setTask(data []byte) error {
 		return err
 	}
 
+	s.muState.Lock()
+	defer s.muState.Unlock()
+
 	worker, ok := s.state[unmarshaled.WorkerId]
 	if !ok {
 		return ErrWorkerNotFound
 	}
 
-	worker.Tasks[unmarshaled.Task.Id] = unmarshaled.Task
+	tasks := mapsinternal.ConcurrentCopy(worker.Tasks)
+	tasks[unmarshaled.Task.Id] = unmarshaled.Task
+	worker.Tasks = tasks
 	s.state[unmarshaled.WorkerId] = worker
 	return nil
 }

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	mapsinternal "github.com/SergeyCherepiuk/fleet/internal/maps"
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
-	"github.com/SergeyCherepiuk/fleet/pkg/collections/queue"
 	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/container"
 	"github.com/SergeyCherepiuk/fleet/pkg/httpclient"
@@ -30,7 +30,7 @@ type Worker struct {
 	runtime      c14n.Runtime
 	store        consensus.Store
 	managerAddr  string
-	shutdownCmds queue.Queue[*exec.Cmd]
+	shutdownCmds chan *exec.Cmd
 }
 
 type Message struct {
@@ -45,7 +45,7 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 		runtime:      runtime,
 		store:        consensus.NewLocalStore(),
 		managerAddr:  managerAddr,
-		shutdownCmds: queue.New[*exec.Cmd](0),
+		shutdownCmds: make(chan *exec.Cmd),
 	}
 
 	worker.register()
@@ -121,11 +121,7 @@ func (w *Worker) CommitChanges(cmds ...consensus.Command) (int, error) {
 }
 
 func (w *Worker) CancleShutdown() error {
-	cmd, err := w.shutdownCmds.Dequeue()
-	if err != nil {
-		return nil
-	}
-
+	cmd := <-w.shutdownCmds
 	if cmd == nil || cmd.Process == nil {
 		return nil
 	}
@@ -210,7 +206,7 @@ func (w *Worker) inspectTasks() {
 			continue
 		}
 
-		for _, t := range worker.Tasks {
+		for _, t := range mapsinternal.ConcurrentCopy(worker.Tasks) {
 			actualState, ok := containerIdsToStates[t.Container.Id]
 			if !ok && t.State == task.Running {
 				t.State = task.FailedAfterStartup
@@ -247,8 +243,8 @@ func (w *Worker) spawnShutdownProcesses() {
 
 		commands := strings.Join([]string{sleep, kill, stop}, "; ")
 		cmd := exec.Command("/bin/sh", "-c", commands)
-		w.shutdownCmds.Enqueue(cmd)
-		cmd.Run()
+		cmd.Start()
+		w.shutdownCmds <- cmd
 	}
 }
 

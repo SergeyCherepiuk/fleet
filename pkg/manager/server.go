@@ -118,7 +118,6 @@ func StartServer(addr string, manager *Manager) error {
 
 	e.GET("/task/list", func(c echo.Context) error {
 		events := manager.EventsQueue.GetAll()
-		fmt.Println(events)
 		pendingTasks := make([]task.Task, 0, len(events))
 		for _, event := range events {
 			pendingTasks = append(pendingTasks, event.Task)
