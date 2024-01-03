@@ -1,7 +1,7 @@
 package node
 
 import (
-	"bufio"
+	"bytes"
 	"errors"
 	"os"
 	"strconv"
@@ -26,20 +26,14 @@ func CPU(interval time.Duration) (CPUStat, error) {
 	var cores uint
 
 	for i := 0; i < 2; i++ {
-		file, err := os.Open("/proc/stat")
+		content, err := os.ReadFile("/proc/stat")
 		if err != nil {
 			return errCPUStat, err
 		}
-		defer file.Close()
+		content = bytes.TrimSpace(content)
 
 		lines := make([]string, 0)
-		reader := bufio.NewReader(file)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				break
-			}
-
+		for _, line := range strings.Split(string(content), "\n") {
 			if strings.HasPrefix(line, "cpu") {
 				lines = append(lines, line)
 			}

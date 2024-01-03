@@ -149,6 +149,13 @@ func (w *Worker) AvailableResources() (node.Resources, error) {
 		workerResources.Memory.Total-reservedResources.Memory,
 	)
 	workerResources.Memory.Available = max(availableMemory, 0)
+
+	availableDisk := min(
+		workerResources.Disk.Available,
+		workerResources.Disk.Total-reservedResources.Disk,
+	)
+	workerResources.Disk.Available = max(availableDisk, 0)
+
 	return workerResources, nil
 }
 
@@ -163,6 +170,7 @@ func (w *Worker) ReservedResources() (container.RequiredResources, error) {
 		if t.State == task.Running {
 			resources.CPU += t.Container.Config.RequiredResources.CPU
 			resources.Memory += t.Container.Config.RequiredResources.Memory
+			resources.Disk += t.Container.Config.RequiredResources.Disk
 		}
 	}
 	return resources, nil

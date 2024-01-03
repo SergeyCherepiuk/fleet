@@ -21,6 +21,7 @@ const (
 	EventQueueInterval   = 100 * time.Millisecond
 	MessageQueueInterval = 100 * time.Millisecond
 	HeartbeatInterval    = 2 * time.Second
+	EventRetryTimeout    = 1 * time.Second
 
 	RestartSleepTimeCoefficient = 2
 )
@@ -109,6 +110,9 @@ func (m *Manager) watchEventsQueue() {
 		}
 
 		if err != nil {
+			time.Sleep(EventRetryTimeout)
+			// TODO(SergeyCherepiuk): After re-scheduling the task is dequeued immediately
+			// leading to it not being present on the list as a pending task
 			m.EventsQueue.Enqueue(event)
 		}
 	}

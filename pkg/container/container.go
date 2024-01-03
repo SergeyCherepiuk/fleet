@@ -48,6 +48,7 @@ const (
 type RequiredResources struct {
 	CPU    float64
 	Memory uint64
+	Disk   uint64
 }
 
 type State struct {

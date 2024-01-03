@@ -23,6 +23,7 @@ type Node struct {
 type Resources struct {
 	CPU    CPUStat
 	Memory MemoryStat
+	Disk   DiskStat
 }
 
 func (n Node) Resources() (Resources, error) {
@@ -34,6 +35,9 @@ func (n Node) Resources() (Resources, error) {
 	cpustat, e := CPU(100 * time.Millisecond)
 	err = errors.Join(err, e)
 
-	stat := Resources{Memory: memstat, CPU: cpustat}
+	diskstat, e := Disk()
+	err = errors.Join(err, e)
+
+	stat := Resources{Memory: memstat, CPU: cpustat, Disk: diskstat}
 	return stat, err
 }

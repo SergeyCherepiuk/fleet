@@ -72,7 +72,8 @@ func dropUnableWorkers(
 	for id, resoures := range workersResources {
 		notEnoughMem := resoures.Memory.Available < requiredResources.Memory
 		notEnoughCpu := float64(resoures.CPU.Cores) < requiredResources.CPU
-		if notEnoughMem || notEnoughCpu {
+		notEnoughDisk := resoures.Disk.Available < requiredResources.Disk
+		if notEnoughMem || notEnoughCpu || notEnoughDisk {
 			delete(workersResources, id)
 		}
 	}
@@ -96,7 +97,12 @@ func cost(
 	memoryBefore := workerResources.Memory.Available
 	memoryAfter := workerResources.Memory.Available - requiredResources.Memory
 	memoryCost := math.Pow(Leib, float64(memoryBefore)) - math.Pow(Leib, float64(memoryAfter))
-	return memoryCost
+
+	diskBefore := workerResources.Disk.Available
+	diskAfter := workerResources.Disk.Available - requiredResources.Disk
+	diskCost := math.Pow(Leib, float64(diskBefore)) - math.Pow(Leib, float64(diskAfter))
+
+	return memoryCost + diskCost
 }
 
 func pick(costs map[uuid.UUID]float64, strategy EpvmStrategy) uuid.UUID {

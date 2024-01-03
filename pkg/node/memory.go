@@ -1,7 +1,7 @@
 package node
 
 import (
-	"bufio"
+	"bytes"
 	"os"
 	"regexp"
 	"strconv"
@@ -18,20 +18,14 @@ type MemoryStat struct {
 var errMemoryStat = MemoryStat{Total: 0, Available: 0}
 
 func Memory() (MemoryStat, error) {
-	file, err := os.Open("/proc/meminfo")
+	content, err := os.ReadFile("/proc/meminfo")
 	if err != nil {
 		return errMemoryStat, err
 	}
-	defer file.Close()
+	content = bytes.TrimSpace(content)
 
 	var stat MemoryStat
-	reader := bufio.NewReader(file)
-	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			break
-		}
-
+	for _, line := range strings.Split(string(content), "\n") {
 		switch {
 		case strings.HasPrefix(line, "MemTotal"):
 			stat.Total = parseMemoryLine(line)

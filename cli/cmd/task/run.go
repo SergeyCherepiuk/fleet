@@ -29,7 +29,8 @@ func runRun(_ *cobra.Command, _ []string) error {
 		RestartPolicy: container.Always,
 		RequiredResources: container.RequiredResources{
 			CPU:    4.0,
-			Memory: 10020556544,
+			Memory: 8 * 1024 * 1024 * 1024,
+			Disk:   15 * 1024 * 1024 * 1024,
 		},
 	}
 
