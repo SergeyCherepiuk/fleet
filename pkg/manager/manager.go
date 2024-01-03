@@ -166,6 +166,10 @@ func (m *Manager) sendHeartbeats() {
 				}
 			}
 
+			if resp == nil || resp.Body == nil {
+				continue
+			}
+
 			var off int
 			if err := httpinternal.Body(resp, &off); err != nil {
 				continue
