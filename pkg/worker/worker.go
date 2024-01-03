@@ -129,6 +129,10 @@ func (w *Worker) CancleShutdown() error {
 	return exec.Command("kill", "-9", fmt.Sprint(cmd.Process.Pid)).Run()
 }
 
+func (w *Worker) CheckStoreSynchronization(lastIndex int) int {
+	return max(0, lastIndex-w.store.LastIndex())
+}
+
 func (w *Worker) AvailableResources() (node.Resources, error) {
 	workerResources, err := w.Node.Resources()
 	if err != nil {

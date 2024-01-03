@@ -13,6 +13,7 @@ const (
 	SetWorker    CommandType = "SetWorker"
 	RemoveWorker CommandType = "RemoveWorker"
 	SetTask      CommandType = "SetTask"
+	RemoveTask   CommandType = "RemoveTask"
 )
 
 type Command struct {
@@ -39,6 +40,12 @@ func NewSetTaskCommand(index int, workerId uuid.UUID, task task.Task) *Command {
 	return &Command{Index: index, Type: SetTask, Data: marshaled}
 }
 
+func NewRemoveTaskCommand(index int, taskId uuid.UUID) *Command {
+	data := RemoveTaskCommandData{TaskId: taskId}
+	marshaled, _ := json.Marshal(data)
+	return &Command{Index: index, Type: RemoveTask, Data: marshaled}
+}
+
 type SetWorkerCommandData struct {
 	WorkerId uuid.UUID
 	Worker   Worker
@@ -51,4 +58,8 @@ type RemoveWorkerCommandData struct {
 type SetTaskCommandData struct {
 	WorkerId uuid.UUID
 	Task     task.Task
+}
+
+type RemoveTaskCommandData struct {
+	TaskId uuid.UUID
 }

@@ -57,7 +57,6 @@ func (m *Manager) AddWorker(wid uuid.UUID, addr node.Addr) {
 	}
 	cmd := consensus.NewSetWorkerCommand(m.Store.LastIndex()+1, wid, worker)
 	m.Store.CommitChange(*cmd) // Error is ignored (SetWorker command cannot return an error)
-	m.broadcastCommands(*cmd)
 }
 
 func (m *Manager) RemoveWorker(wid uuid.UUID) error {
@@ -65,8 +64,6 @@ func (m *Manager) RemoveWorker(wid uuid.UUID) error {
 	if _, err := m.Store.CommitChange(*cmd); err != nil {
 		return err
 	}
-
-	m.broadcastCommands(*cmd)
 	return nil
 }
 
@@ -126,6 +123,11 @@ func (m *Manager) watchWorkerMessageQueue() {
 		}
 
 		t := message.Task
+
+		lastIndex := m.Store.LastIndex()
+		cmd := consensus.NewSetTaskCommand(lastIndex+1, message.From, t)
+		m.Store.CommitChange(*cmd)
+
 		if t.State.Fail() || t.State == task.Finished {
 			rp := message.Task.Container.Config.RestartPolicy
 
@@ -140,36 +142,41 @@ func (m *Manager) watchWorkerMessageQueue() {
 					restartMethod = task.RestartingImmediately
 				}
 
-				// TODO(SergeyCherepiuk): When the task restarts on the other worker
-				// its record is still present in the store for the previous worker
-				t.State = restartMethod
+				cmd := consensus.NewRemoveTaskCommand(lastIndex+2, t.Id)
+				m.Store.CommitChange(*cmd)
+
 				event := task.Event{Task: t, Desired: restartMethod}
 				m.EventsQueue.Enqueue(event)
 			}
 		}
-
-		cmd := consensus.NewSetTaskCommand(m.Store.LastIndex()+1, message.From, t)
-		m.Store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
-		m.broadcastCommands(*cmd)
 	}
 }
 
-// TODO(SergeyCherepiuk): Heartbeats should check whether worker's store is synced
 func (m *Manager) sendHeartbeats() {
+	ticker := time.NewTicker(HeartbeatInterval)
 	for {
 		for wid, worker := range m.Store.AllWorkers() {
-			resp, err := httpclient.Get(worker.Addr.String(), "/heartbeat")
+			resp, err := httpclient.Post(worker.Addr.String(), "/heartbeat", m.Store.LastIndex())
 			if err != nil || resp.StatusCode != http.StatusOK {
 				cmd := consensus.NewRemoveWorkerCommand(m.Store.LastIndex()+1, wid)
-				m.Store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
-				m.broadcastCommands(*cmd)
+				m.Store.CommitChange(*cmd)
 
 				for _, t := range worker.Tasks {
 					m.run(t)
 				}
 			}
+
+			var off int
+			if err := httpinternal.Body(resp, &off); err != nil {
+				continue
+			}
+
+			if off > 0 {
+				cmds := m.Store.GetLastNCommands(off)
+				go m.broadcastCommandsToWorker(worker.Addr, cmds...)
+			}
 		}
-		time.Sleep(HeartbeatInterval)
+		<-ticker.C
 	}
 }
 
@@ -183,8 +190,7 @@ func (m *Manager) run(t task.Task) error {
 	t.State = task.Scheduled
 
 	cmd := consensus.NewSetTaskCommand(m.Store.LastIndex()+1, workerId, t)
-	m.Store.CommitChange(*cmd) // TODO(SergeyCherepiuk): Handle the error
-	m.broadcastCommands(*cmd)
+	m.Store.CommitChange(*cmd)
 
 	httpclient.Post(worker.Addr.String(), "/task/run", t)
 	return nil
@@ -222,12 +228,6 @@ func (m *Manager) scheduleRestart(t task.Task) {
 	}()
 }
 
-func (m *Manager) broadcastCommands(cmds ...consensus.Command) {
-	for _, worker := range m.Store.AllWorkers() {
-		go m.broadcastCommandsToWorker(worker.Addr, cmds...)
-	}
-}
-
 func (m *Manager) broadcastCommandsToWorker(addr node.Addr, cmds ...consensus.Command) {
 	resp, err := httpclient.Post(addr.String(), "/store/command", cmds)
 	if err != nil {
@@ -238,9 +238,11 @@ func (m *Manager) broadcastCommandsToWorker(addr node.Addr, cmds ...consensus.Co
 		return
 	}
 
-	var offset int
-	httpinternal.Body(resp, &offset)
+	var off int
+	httpinternal.Body(resp, &off)
 
-	cmds = m.Store.GetLastNCommands(offset)
-	m.broadcastCommandsToWorker(addr, cmds...)
+	if off > 0 {
+		cmds = m.Store.GetLastNCommands(off)
+		m.broadcastCommandsToWorker(addr, cmds...)
+	}
 }

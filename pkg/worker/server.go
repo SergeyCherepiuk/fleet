@@ -63,7 +63,7 @@ func StartServer(addr string, worker *Worker) error {
 	e.POST("/store/command", func(c echo.Context) error {
 		var cmds []consensus.Command
 		if err := c.Bind(&cmds); err != nil {
-			return echo.NewHTTPError(http.StatusBadRequest, err)
+			return c.JSON(http.StatusBadRequest, 0)
 		}
 
 		if off, err := worker.CommitChanges(cmds...); err != nil {
@@ -77,11 +77,18 @@ func StartServer(addr string, worker *Worker) error {
 		return c.JSON(http.StatusOK, worker.Info())
 	})
 
-	e.GET("/heartbeat", func(c echo.Context) error {
+	e.POST("/heartbeat", func(c echo.Context) error {
 		if err := worker.CancleShutdown(); err != nil {
 			return c.NoContent(http.StatusInternalServerError)
 		}
-		return c.NoContent(http.StatusOK)
+
+		var lastIndex int
+		if err := c.Bind(&lastIndex); err != nil {
+			return c.JSON(http.StatusOK, 0)
+		}
+
+		off := worker.CheckStoreSynchronization(lastIndex)
+		return c.JSON(http.StatusOK, off)
 	})
 
 	return e.Start(addr)

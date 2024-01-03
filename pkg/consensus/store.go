@@ -95,19 +95,21 @@ func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
 	return uuid.Nil, Worker{}, ErrWorkerNotFound
 }
 
+// TODO(SergeyCherepiuk): Called too many times
 func (s *store) GetLastNCommands(n int) []Command {
 	s.muLog.RLock()
 	defer s.muLog.RUnlock()
 
+	n = min(n, len(s.log))
 	c := make([]Command, n)
 	copy(c, s.log[len(s.log)-n:])
 	return c
 }
 
 func (s *store) Size() int {
-	s.muState.RLock()
-	defer s.muState.RUnlock()
-	return len(s.state)
+	s.muLog.RLock()
+	defer s.muLog.RUnlock()
+	return len(s.log)
 }
 
 func (s *store) LastIndex() int {
@@ -121,8 +123,11 @@ func (s *store) LastIndex() int {
 }
 
 func (s *store) CommitChange(cmd Command) (int, error) {
-	if s.LastIndex() != cmd.Index-1 {
-		return cmd.Index - s.LastIndex(), ErrLogOutOfSync
+	lastIndex := s.LastIndex()
+	diff := cmd.Index - 1 - lastIndex
+
+	if diff > 0 {
+		return diff, ErrLogOutOfSync
 	}
 
 	var err error
@@ -133,6 +138,8 @@ func (s *store) CommitChange(cmd Command) (int, error) {
 		err = s.removeWorker(cmd.Data)
 	case SetTask:
 		err = s.setTask(cmd.Data)
+	case RemoveTask:
+		err = s.removeTask(cmd.Data)
 	default:
 		err = ErrUnknownCommand
 	}
@@ -198,5 +205,26 @@ func (s *store) setTask(data []byte) error {
 	tasks[unmarshaled.Task.Id] = unmarshaled.Task
 	worker.Tasks = tasks
 	s.state[unmarshaled.WorkerId] = worker
+	return nil
+}
+
+func (s *store) removeTask(data []byte) error {
+	var unmarshaled RemoveTaskCommandData
+	if err := json.Unmarshal(data, &unmarshaled); err != nil {
+		return err
+	}
+
+	id, worker, err := s.GetWorkerByTaskId(unmarshaled.TaskId)
+	if err != nil {
+		return err
+	}
+
+	tasks := mapsinternal.ConcurrentCopy(worker.Tasks)
+	delete(tasks, unmarshaled.TaskId)
+	worker.Tasks = tasks
+
+	s.muState.Lock()
+	defer s.muState.Unlock()
+	s.state[id] = worker
 	return nil
 }
