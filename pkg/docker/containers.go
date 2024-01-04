@@ -35,7 +35,7 @@ func toFleetContainer(dockerContainer types.Container) container.Container {
 	return container.Container{
 		Id: dockerContainer.ID,
 		Image: image.Image{
-			ID:  dockerContainer.ImageID,
+			Id:  dockerContainer.ImageID,
 			Ref: dockerContainer.Image,
 		},
 		Config: container.Config{

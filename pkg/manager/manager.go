@@ -22,6 +22,7 @@ const (
 	MessageQueueInterval = 100 * time.Millisecond
 	HeartbeatInterval    = 2 * time.Second
 	EventRetryTimeout    = 1 * time.Second
+	BackOffResetInterval = 30 * time.Second
 
 	RestartSleepTimeCoefficient = 2
 )
@@ -86,7 +87,8 @@ func (m *Manager) Tasks() []task.Task {
 
 func (m *Manager) watchEventsQueue() {
 	for {
-		if m.Store.Size() == 0 { // No workers available
+		if m.Store.WorkersNumber() == 0 { // No workers available
+			time.Sleep(EventQueueInterval)
 			continue
 		}
 
@@ -166,7 +168,8 @@ func (m *Manager) sendHeartbeats() {
 				m.Store.CommitChange(*cmd)
 
 				for _, t := range worker.Tasks {
-					m.run(t)
+					event := task.Event{Task: t, Desired: task.RestartingImmediately}
+					m.EventsQueue.Enqueue(event)
 				}
 			}
 
@@ -221,12 +224,22 @@ func (m *Manager) restart(t task.Task) {
 
 func (m *Manager) scheduleRestart(t task.Task) {
 	var sleepTime time.Duration
+
 	if len(t.Restarts) < 2 {
-		sleepTime = time.Second
+		sleepTime = 1 * time.Second
 	} else {
 		l := len(t.Restarts)
-		lastSleepTime := t.Restarts[l-1].Sub(t.Restarts[l-2])
-		sleepTime = lastSleepTime * RestartSleepTimeCoefficient
+
+		resetBackOff := time.Since(t.Restarts[l-1]) > BackOffResetInterval ||
+			t.Restarts[l-1].Sub(t.Restarts[l-2]) > BackOffResetInterval
+
+		// TODO(SergeyCherepiuk): Test manually
+		if resetBackOff {
+			sleepTime = 0 * time.Second
+		} else {
+			lastSleepTime := t.Restarts[l-1].Sub(t.Restarts[l-2])
+			sleepTime = lastSleepTime * RestartSleepTimeCoefficient
+		}
 	}
 
 	go func() {

@@ -5,7 +5,7 @@ import (
 )
 
 type Container struct {
-	Id     string
+	Id     string `yaml:"-"`
 	Image  image.Image
 	Config Config
 }

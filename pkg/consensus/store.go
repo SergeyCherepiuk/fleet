@@ -17,7 +17,9 @@ type Store interface {
 	GetWorker(worketId uuid.UUID) (Worker, error)
 	GetWorkerByTaskId(taskId uuid.UUID) (uuid.UUID, Worker, error)
 	GetLastNCommands(n int) []Command
-	Size() int
+
+	LogSize() int
+	WorkersNumber() int
 
 	LastIndex() int
 	CommitChange(cmd Command) (off int, err error)
@@ -95,7 +97,6 @@ func (s *store) GetWorkerByTaskId(tid uuid.UUID) (uuid.UUID, Worker, error) {
 	return uuid.Nil, Worker{}, ErrWorkerNotFound
 }
 
-// TODO(SergeyCherepiuk): Called too many times
 func (s *store) GetLastNCommands(n int) []Command {
 	s.muLog.RLock()
 	defer s.muLog.RUnlock()
@@ -106,14 +107,20 @@ func (s *store) GetLastNCommands(n int) []Command {
 	return c
 }
 
-func (s *store) Size() int {
+func (s *store) LogSize() int {
 	s.muLog.RLock()
 	defer s.muLog.RUnlock()
 	return len(s.log)
 }
 
+func (s *store) WorkersNumber() int {
+	s.muState.RLock()
+	defer s.muState.RUnlock()
+	return len(s.state)
+}
+
 func (s *store) LastIndex() int {
-	if s.Size() == 0 {
+	if s.LogSize() == 0 {
 		return 0
 	}
 

@@ -1,0 +1,17 @@
+- task:
+    image: "docker.io/library/nginx:latest"
+    exposedPorts: [80]
+    restartPolicy: always
+
+- task:
+    image: "docker.io/library/neo4j:latest"
+    exposedPorts: [7474, 7687]
+    labels:
+      stage: prod
+    env:
+      NEO4j_AUTH: none
+    restartPolicy: on-failure
+    requiredResources:
+      cpu: 4.0
+      memory: 8589934592 # 8 GB
+      disk: 53687091200 # 50 GB

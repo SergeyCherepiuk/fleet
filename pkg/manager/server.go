@@ -91,16 +91,18 @@ func StartServer(addr string, manager *Manager) error {
 	})
 
 	e.POST("/task/run", func(c echo.Context) error {
-		var t task.Task
-		if err := c.Bind(&t); err != nil {
+		var tasks []task.Task
+		if err := c.Bind(&tasks); err != nil {
 			return echo.NewHTTPError(
 				http.StatusBadRequest,
 				fmt.Errorf("invalid task format: %w", err),
 			)
 		}
 
-		event := task.Event{Task: t, Desired: task.Running}
-		manager.EventsQueue.Enqueue(event)
+		for _, t := range tasks {
+			event := task.Event{Task: t, Desired: task.Running}
+			manager.EventsQueue.Enqueue(event)
+		}
 		return c.NoContent(http.StatusCreated)
 	})
 
