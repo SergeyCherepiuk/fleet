@@ -22,7 +22,7 @@ const (
 	MessageQueueInterval = 100 * time.Millisecond
 	HeartbeatInterval    = 2 * time.Second
 	EventRetryTimeout    = 1 * time.Second
-	BackOffResetInterval = 30 * time.Second
+	BackOffResetInterval = 5 * time.Minute
 
 	RestartSleepTimeCoefficient = 2
 )
@@ -87,7 +87,7 @@ func (m *Manager) Tasks() []task.Task {
 
 func (m *Manager) watchEventsQueue() {
 	for {
-		if m.Store.WorkersNumber() == 0 { // No workers available
+		if m.Store.WorkersNumber() == 0 { // NOTE(SergeyCherepiuk): No workers available
 			time.Sleep(EventQueueInterval)
 			continue
 		}
@@ -106,8 +106,6 @@ func (m *Manager) watchEventsQueue() {
 		case task.RestartingImmediately:
 			m.restart(event.Task)
 		case task.RestartingWithBackOff:
-			// TODO(SergeyCherepiuk): Disregard number of restarts if task is
-			// running successfully long enough
 			m.scheduleRestart(event.Task)
 		}
 
@@ -163,17 +161,20 @@ func (m *Manager) sendHeartbeats() {
 	for {
 		for wid, worker := range m.Store.AllWorkers() {
 			resp, err := httpclient.Post(worker.Addr.String(), "/heartbeat", m.Store.LastIndex())
-			if err != nil || resp.StatusCode != http.StatusOK {
+
+			rescheduleTasks := err != nil || resp == nil ||
+				resp.Body == nil || resp.StatusCode != http.StatusOK
+
+			if rescheduleTasks {
 				cmd := consensus.NewRemoveWorkerCommand(m.Store.LastIndex()+1, wid)
 				m.Store.CommitChange(*cmd)
 
 				for _, t := range worker.Tasks {
+					t.State = task.FailedAfterStartup
 					event := task.Event{Task: t, Desired: task.RestartingImmediately}
 					m.EventsQueue.Enqueue(event)
 				}
-			}
 
-			if resp == nil || resp.Body == nil {
 				continue
 			}
 
@@ -225,21 +226,14 @@ func (m *Manager) restart(t task.Task) {
 func (m *Manager) scheduleRestart(t task.Task) {
 	var sleepTime time.Duration
 
-	if len(t.Restarts) < 2 {
+	restartWithoutSleep := len(t.Restarts) == 0 ||
+		t.FinishedAt.Sub(t.StartedAt) > BackOffResetInterval
+
+	if restartWithoutSleep {
 		sleepTime = 1 * time.Second
 	} else {
-		l := len(t.Restarts)
-
-		resetBackOff := time.Since(t.Restarts[l-1]) > BackOffResetInterval ||
-			t.Restarts[l-1].Sub(t.Restarts[l-2]) > BackOffResetInterval
-
-		// TODO(SergeyCherepiuk): Test manually
-		if resetBackOff {
-			sleepTime = 0 * time.Second
-		} else {
-			lastSleepTime := t.Restarts[l-1].Sub(t.Restarts[l-2])
-			sleepTime = lastSleepTime * RestartSleepTimeCoefficient
-		}
+		lastSleepTime := time.Since(t.Restarts[len(t.Restarts)-1])
+		sleepTime = lastSleepTime * RestartSleepTimeCoefficient
 	}
 
 	go func() {

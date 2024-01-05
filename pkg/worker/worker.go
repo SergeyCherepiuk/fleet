@@ -58,7 +58,6 @@ func New(node node.Node, runtime c14n.Runtime, managerAddr string) *Worker {
 
 func (w *Worker) Run(ctx context.Context, t task.Task) error {
 	defer func() {
-		t.StartedAt = time.Now()
 		message := Message{From: w.Id, Task: t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
@@ -71,12 +70,12 @@ func (w *Worker) Run(ctx context.Context, t task.Task) error {
 
 	t.Container.Id = id
 	t.State = task.Running
+	t.StartedAt = time.Now()
 	return nil
 }
 
 func (w *Worker) Finish(ctx context.Context, t task.Task) error {
 	defer func() {
-		t.FinishedAt = time.Now()
 		message := Message{From: w.Id, Task: t}
 		httpclient.Post(w.managerAddr, "/worker/message", message)
 	}()
@@ -87,6 +86,7 @@ func (w *Worker) Finish(ctx context.Context, t task.Task) error {
 	}
 
 	t.State = task.Finished
+	t.FinishedAt = time.Now()
 	return nil
 }
 
