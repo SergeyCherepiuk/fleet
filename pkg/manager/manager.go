@@ -21,10 +21,9 @@ const (
 	EventQueueInterval   = 100 * time.Millisecond
 	MessageQueueInterval = 100 * time.Millisecond
 	HeartbeatInterval    = 2 * time.Second
-	EventRetryTimeout    = 1 * time.Second
 	BackOffResetInterval = 5 * time.Minute
 
-	RestartSleepTimeCoefficient = 2
+	BackOffTimeCoefficient = 2
 )
 
 type Manager struct {
@@ -32,17 +31,18 @@ type Manager struct {
 	node                node.Node
 	scheduler           scheduler.Scheduler
 	Store               consensus.Store
-	EventsQueue         queue.Queue[task.Event]
-	WorkerMessagesQueue queue.Queue[worker.Message]
+	EventsQueue         *queue.TimeBasedQueue[task.Event]
+	WorkerMessagesQueue *queue.Queue[worker.Message]
 }
 
 func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 	manager := Manager{
-		id:          uuid.New(),
-		node:        node,
-		scheduler:   scheduler,
-		Store:       consensus.NewLocalStore(),
-		EventsQueue: queue.New[task.Event](0),
+		id:                  uuid.New(),
+		node:                node,
+		scheduler:           scheduler,
+		Store:               consensus.NewLocalStore(),
+		EventsQueue:         queue.NewTimeBasedQueue[task.Event](0, EventQueueInterval),
+		WorkerMessagesQueue: queue.NewQueue[worker.Message](0),
 	}
 
 	go manager.watchEventsQueue()
@@ -86,18 +86,14 @@ func (m *Manager) Tasks() []task.Task {
 }
 
 func (m *Manager) watchEventsQueue() {
-	for {
+	for event := range m.EventsQueue.Out() {
 		if m.Store.WorkersNumber() == 0 { // NOTE(SergeyCherepiuk): No workers available
+			m.EventsQueue.Enqueue(event)
 			time.Sleep(EventQueueInterval)
 			continue
 		}
 
-		event, err := m.EventsQueue.Dequeue()
-		if err != nil {
-			time.Sleep(EventQueueInterval)
-			continue
-		}
-
+		var err error
 		switch event.Desired {
 		case task.Running:
 			err = m.run(event.Task)
@@ -110,10 +106,9 @@ func (m *Manager) watchEventsQueue() {
 		}
 
 		if err != nil {
-			time.Sleep(EventRetryTimeout)
-			// TODO(SergeyCherepiuk): After re-scheduling the task is dequeued immediately
-			// leading to it not being present on the list as a pending task
 			m.EventsQueue.Enqueue(event)
+			time.Sleep(EventQueueInterval)
+			continue
 		}
 	}
 }
@@ -157,8 +152,7 @@ func (m *Manager) watchWorkerMessageQueue() {
 }
 
 func (m *Manager) sendHeartbeats() {
-	ticker := time.NewTicker(HeartbeatInterval)
-	for {
+	for range time.NewTicker(HeartbeatInterval).C {
 		for wid, worker := range m.Store.AllWorkers() {
 			resp, err := httpclient.Post(worker.Addr.String(), "/heartbeat", m.Store.LastIndex())
 
@@ -188,7 +182,6 @@ func (m *Manager) sendHeartbeats() {
 				go m.broadcastCommandsToWorker(worker.Addr, cmds...)
 			}
 		}
-		<-ticker.C
 	}
 }
 
@@ -220,27 +213,27 @@ func (m *Manager) finish(t task.Task) error {
 
 func (m *Manager) restart(t task.Task) {
 	t.Restarts = append(t.Restarts, time.Now())
-	m.run(t)
+	event := task.Event{Task: t, Desired: task.Running}
+	m.EventsQueue.Enqueue(event)
 }
 
 func (m *Manager) scheduleRestart(t task.Task) {
-	var sleepTime time.Duration
+	var backOffTime time.Duration
 
-	restartWithoutSleep := len(t.Restarts) == 0 ||
+	restartWithoutBackOff := len(t.Restarts) == 0 ||
 		t.FinishedAt.Sub(t.StartedAt) > BackOffResetInterval
 
-	if restartWithoutSleep {
-		sleepTime = 1 * time.Second
+	if restartWithoutBackOff {
+		backOffTime = 1 * time.Second
 	} else {
-		lastSleepTime := time.Since(t.Restarts[len(t.Restarts)-1])
-		sleepTime = lastSleepTime * RestartSleepTimeCoefficient
+		lastBackOffTime := time.Since(t.Restarts[len(t.Restarts)-1])
+		backOffTime = lastBackOffTime * BackOffTimeCoefficient
 	}
 
-	go func() {
-		time.Sleep(sleepTime)
-		t.Restarts = append(t.Restarts, time.Now())
-		m.run(t)
-	}()
+	t.Restarts = append(t.Restarts, time.Now())
+	processAfter := time.Now().Add(backOffTime)
+	event := task.Event{Task: t, Desired: task.Running}
+	m.EventsQueue.EnqueueWithDelay(processAfter, event)
 }
 
 func (m *Manager) broadcastCommandsToWorker(addr node.Addr, cmds ...consensus.Command) {

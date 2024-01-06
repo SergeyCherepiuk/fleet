@@ -12,8 +12,8 @@ type Queue[T any] struct {
 	buf []T
 }
 
-func New[T any](capacity int) Queue[T] {
-	return Queue[T]{
+func NewQueue[T any](capacity int) *Queue[T] {
+	return &Queue[T]{
 		buf: make([]T, 0, capacity),
 	}
 }
@@ -37,16 +37,40 @@ func (q *Queue[T]) Enqueue(value T) {
 }
 
 func (q *Queue[T]) Dequeue() (T, error) {
+	value, err := q.Peek()
+	if err != nil {
+		return *new(T), err
+	}
+
+	if err := q.Pop(); err != nil {
+		return *new(T), err
+	}
+
+	return value, nil
+}
+
+func (q *Queue[T]) Peek() (T, error) {
 	if q.IsEmpty() {
 		return *new(T), ErrEmptyQueue
+	}
+
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+
+	value := q.buf[0]
+	return value, nil
+}
+
+func (q *Queue[T]) Pop() error {
+	if q.IsEmpty() {
+		return ErrEmptyQueue
 	}
 
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	value := q.buf[0]
 	q.buf = q.buf[1:]
-	return value, nil
+	return nil
 }
 
 func (q *Queue[T]) GetAll() []T {
