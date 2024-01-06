@@ -70,7 +70,7 @@ func (w *Worker) Run(ctx context.Context, t task.Task) error {
 
 	t.Container.Id = id
 	t.State = task.Running
-	t.StartedAt = time.Now()
+	t.StartedAt = append(t.StartedAt, time.Now())
 	return nil
 }
 
@@ -86,7 +86,7 @@ func (w *Worker) Finish(ctx context.Context, t task.Task) error {
 	}
 
 	t.State = task.Finished
-	t.FinishedAt = time.Now()
+	t.FinishedAt = append(t.FinishedAt, time.Now())
 	return nil
 }
 

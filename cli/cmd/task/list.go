@@ -46,9 +46,9 @@ func listRun(_ *cobra.Command, _ []string) error {
 		"TASK ID":     func(t task.Task) any { return formatId(t.Id) },
 		"IMAGE":       func(t task.Task) any { return trimImageRef(t.Container.Image.Ref) },
 		"STATE":       func(t task.Task) any { return t.State },
-		"RESTARTS":    func(t task.Task) any { return len(t.Restarts) },
-		"START TIME":  func(t task.Task) any { return formatTime(t.StartedAt) },
-		"FINISH TIME": func(t task.Task) any { return formatTime(t.FinishedAt) },
+		"RESTARTS":    func(t task.Task) any { return max(0, len(t.StartedAt)-1) },
+		"START TIME":  func(t task.Task) any { return formatLastTime(t.StartedAt) },
+		"FINISH TIME": func(t task.Task) any { return formatLastTime(t.FinishedAt) },
 	}
 	fmt.Print(format.Table[task.Task](headers, accessMap, tasks))
 	return nil
@@ -69,9 +69,9 @@ func trimImageRef(ref string) string {
 	return ref[index+1:]
 }
 
-func formatTime(t time.Time) string {
-	if t.IsZero() {
+func formatLastTime(ts []time.Time) string {
+	if len(ts) == 0 {
 		return "-"
 	}
-	return t.Format(time.DateTime)
+	return ts[len(ts)-1].Format(time.DateTime)
 }

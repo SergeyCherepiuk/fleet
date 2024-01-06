@@ -41,7 +41,7 @@ func New(node node.Node, scheduler scheduler.Scheduler) *Manager {
 		node:                node,
 		scheduler:           scheduler,
 		Store:               consensus.NewLocalStore(),
-		EventsQueue:         queue.NewTimeBasedQueue[task.Event](0, EventQueueInterval),
+		EventsQueue:         queue.NewTimeBasedQueue[task.Event](EventQueueInterval),
 		WorkerMessagesQueue: queue.NewQueue[worker.Message](0),
 	}
 
@@ -99,8 +99,6 @@ func (m *Manager) watchEventsQueue() {
 			err = m.run(event.Task)
 		case task.Finished:
 			err = m.finish(event.Task)
-		case task.RestartingImmediately:
-			m.restart(event.Task)
 		case task.RestartingWithBackOff:
 			m.scheduleRestart(event.Task)
 		}
@@ -134,17 +132,17 @@ func (m *Manager) watchWorkerMessageQueue() {
 				(rp == container.OnFailure && t.State.Fail())
 
 			if shouldBeRestarted {
-				var restartMethod task.State
+				var desired task.State
 				if t.State == task.FailedOnStartup {
-					restartMethod = task.RestartingWithBackOff
+					desired = task.RestartingWithBackOff
 				} else {
-					restartMethod = task.RestartingImmediately
+					desired = task.Running
 				}
 
 				cmd := consensus.NewRemoveTaskCommand(lastIndex+2, t.Id)
 				m.Store.CommitChange(*cmd)
 
-				event := task.Event{Task: t, Desired: restartMethod}
+				event := task.Event{Task: t, Desired: desired}
 				m.EventsQueue.Enqueue(event)
 			}
 		}
@@ -152,7 +150,7 @@ func (m *Manager) watchWorkerMessageQueue() {
 }
 
 func (m *Manager) sendHeartbeats() {
-	for range time.NewTicker(HeartbeatInterval).C {
+	for range time.Tick(HeartbeatInterval) {
 		for wid, worker := range m.Store.AllWorkers() {
 			resp, err := httpclient.Post(worker.Addr.String(), "/heartbeat", m.Store.LastIndex())
 
@@ -165,7 +163,7 @@ func (m *Manager) sendHeartbeats() {
 
 				for _, t := range worker.Tasks {
 					t.State = task.FailedAfterStartup
-					event := task.Event{Task: t, Desired: task.RestartingImmediately}
+					event := task.Event{Task: t, Desired: task.Running}
 					m.EventsQueue.Enqueue(event)
 				}
 
@@ -211,26 +209,20 @@ func (m *Manager) finish(t task.Task) error {
 	return nil
 }
 
-func (m *Manager) restart(t task.Task) {
-	t.Restarts = append(t.Restarts, time.Now())
-	event := task.Event{Task: t, Desired: task.Running}
-	m.EventsQueue.Enqueue(event)
-}
-
 func (m *Manager) scheduleRestart(t task.Task) {
 	var backOffTime time.Duration
 
-	restartWithoutBackOff := len(t.Restarts) == 0 ||
-		t.FinishedAt.Sub(t.StartedAt) > BackOffResetInterval
+	starts, finishes := len(t.StartedAt), len(t.FinishedAt)
+	restartWithoutBackOff := finishes < 2 ||
+		t.FinishedAt[finishes-2].Sub(t.StartedAt[starts-1]) > BackOffResetInterval
 
 	if restartWithoutBackOff {
 		backOffTime = 1 * time.Second
 	} else {
-		lastBackOffTime := time.Since(t.Restarts[len(t.Restarts)-1])
+		lastBackOffTime := t.FinishedAt[finishes-2].Sub(t.StartedAt[starts-1])
 		backOffTime = lastBackOffTime * BackOffTimeCoefficient
 	}
 
-	t.Restarts = append(t.Restarts, time.Now())
 	processAfter := time.Now().Add(backOffTime)
 	event := task.Event{Task: t, Desired: task.Running}
 	m.EventsQueue.EnqueueWithDelay(processAfter, event)
