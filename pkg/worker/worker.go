@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	mapsinternal "github.com/SergeyCherepiuk/fleet/internal/maps"
 	"github.com/SergeyCherepiuk/fleet/pkg/c14n"
 	"github.com/SergeyCherepiuk/fleet/pkg/consensus"
 	"github.com/SergeyCherepiuk/fleet/pkg/container"
@@ -218,7 +217,8 @@ func (w *Worker) inspectTasks() {
 			continue
 		}
 
-		for _, t := range mapsinternal.ConcurrentCopy(worker.Tasks) {
+		worker.MuTasks.RLock()
+		for _, t := range worker.Tasks {
 			actualState, ok := containerIdsToStates[t.Container.Id]
 			if !ok && t.State == task.Running {
 				t.State = task.FailedAfterStartup
@@ -240,6 +240,8 @@ func (w *Worker) inspectTasks() {
 				w.runtime.StopAndRemove(ctx, t.Container.Id)
 			}
 		}
+		worker.MuTasks.RUnlock()
+
 		time.Sleep(InspectInterval)
 	}
 }

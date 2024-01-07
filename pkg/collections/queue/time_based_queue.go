@@ -1,36 +1,24 @@
 package queue
 
 import (
-	"context"
 	"sync"
 	"time"
 
-	mapsinternal "github.com/SergeyCherepiuk/fleet/internal/maps"
+	"github.com/google/uuid"
 	"golang.org/x/exp/maps"
 )
 
 type TimeBasedQueue[T any] struct {
 	mu  sync.RWMutex
-	buf map[time.Time]T
-
-	interval time.Duration
-	out      chan T
-
-	cancel context.CancelFunc
+	buf map[uuid.UUID]T
+	out chan T
 }
 
 func NewTimeBasedQueue[T any](internal time.Duration) *TimeBasedQueue[T] {
-	ctx, cancel := context.WithCancel(context.Background())
-	tbq := TimeBasedQueue[T]{
-		buf:      make(map[time.Time]T),
-		interval: internal,
-		out:      make(chan T),
-		cancel:   cancel,
+	return &TimeBasedQueue[T]{
+		buf: make(map[uuid.UUID]T),
+		out: make(chan T),
 	}
-
-	go tbq.Watch(ctx)
-
-	return &tbq
 }
 
 func (tbq *TimeBasedQueue[T]) Out() <-chan T {
@@ -43,39 +31,37 @@ func (tbq *TimeBasedQueue[T]) GetAll() []T {
 	return maps.Values(tbq.buf)
 }
 
-func (tbq *TimeBasedQueue[T]) Watch(ctx context.Context) {
-	for range time.Tick(tbq.interval) {
-		select {
-		case <-ctx.Done():
-			return
-
-		default:
-			for processAfter, value := range mapsinternal.ConcurrentCopy(tbq.buf) {
-				if processAfter.Before(time.Now()) {
-					tbq.out <- value
-
-					tbq.mu.Lock()
-					delete(tbq.buf, processAfter)
-					tbq.mu.Unlock()
-				}
-			}
-		}
-	}
+func (tbq *TimeBasedQueue[T]) EnqueueNow(value T) {
+	id := tbq.put(value)
+	go func() {
+		tbq.out <- value
+		tbq.delete(id)
+	}()
 }
 
-func (tbq *TimeBasedQueue[T]) Enqueue(value T) {
-	tbq.mu.Lock()
-	defer tbq.mu.Unlock()
-	tbq.buf[time.Now()] = value
-}
-
-func (tbq *TimeBasedQueue[T]) EnqueueWithDelay(processAfter time.Time, value T) {
-	tbq.mu.Lock()
-	defer tbq.mu.Unlock()
-	tbq.buf[processAfter] = value
+func (tbq *TimeBasedQueue[T]) EnqueueWithDelay(delay time.Duration, value T) {
+	id := tbq.put(value)
+	go func() {
+		time.Sleep(delay)
+		tbq.out <- value
+		tbq.delete(id)
+	}()
 }
 
 func (tbq *TimeBasedQueue[T]) Close() {
-	tbq.cancel()
 	close(tbq.out)
+}
+
+func (tbq *TimeBasedQueue[T]) put(value T) uuid.UUID {
+	id := uuid.New()
+	tbq.mu.Lock()
+	tbq.buf[id] = value
+	tbq.mu.Unlock()
+	return id
+}
+
+func (tbq *TimeBasedQueue[T]) delete(id uuid.UUID) {
+	tbq.mu.Lock()
+	delete(tbq.buf, id)
+	tbq.mu.Unlock()
 }

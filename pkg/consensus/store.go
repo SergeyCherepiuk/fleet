@@ -5,7 +5,6 @@ import (
 	"errors"
 	"sync"
 
-	mapsinternal "github.com/SergeyCherepiuk/fleet/internal/maps"
 	"github.com/SergeyCherepiuk/fleet/pkg/node"
 	"github.com/SergeyCherepiuk/fleet/pkg/task"
 	"github.com/google/uuid"
@@ -48,8 +47,9 @@ func NewLocalStore() *store {
 }
 
 type Worker struct {
-	Addr  node.Addr
-	Tasks map[uuid.UUID]task.Task
+	Addr    node.Addr
+	MuTasks *sync.RWMutex
+	Tasks   map[uuid.UUID]task.Task
 }
 
 func (s *store) AllWorkers() map[uuid.UUID]Worker {
@@ -171,8 +171,9 @@ func (s *store) setWorker(data []byte) error {
 	defer s.muState.Unlock()
 
 	s.state[unmarshaled.WorkerId] = Worker{
-		Addr:  unmarshaled.Worker.Addr,
-		Tasks: make(map[uuid.UUID]task.Task),
+		Addr:    unmarshaled.Worker.Addr,
+		MuTasks: &sync.RWMutex{},
+		Tasks:   make(map[uuid.UUID]task.Task),
 	}
 	return nil
 }
@@ -200,18 +201,18 @@ func (s *store) setTask(data []byte) error {
 		return err
 	}
 
-	s.muState.Lock()
-	defer s.muState.Unlock()
+	s.muState.RLock()
+	defer s.muState.RUnlock()
 
 	worker, ok := s.state[unmarshaled.WorkerId]
 	if !ok {
 		return ErrWorkerNotFound
 	}
 
-	tasks := mapsinternal.ConcurrentCopy(worker.Tasks)
-	tasks[unmarshaled.Task.Id] = unmarshaled.Task
-	worker.Tasks = tasks
-	s.state[unmarshaled.WorkerId] = worker
+	worker.MuTasks.Lock()
+	s.state[unmarshaled.WorkerId].Tasks[unmarshaled.Task.Id] = unmarshaled.Task
+	worker.MuTasks.Unlock()
+
 	return nil
 }
 
@@ -226,12 +227,11 @@ func (s *store) removeTask(data []byte) error {
 		return err
 	}
 
-	tasks := mapsinternal.ConcurrentCopy(worker.Tasks)
-	delete(tasks, unmarshaled.TaskId)
-	worker.Tasks = tasks
+	s.muState.RLock()
+	worker.MuTasks.Lock()
+	delete(s.state[id].Tasks, unmarshaled.TaskId)
+	worker.MuTasks.Unlock()
+	s.muState.RUnlock()
 
-	s.muState.Lock()
-	defer s.muState.Unlock()
-	s.state[id] = worker
 	return nil
 }

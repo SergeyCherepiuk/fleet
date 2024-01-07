@@ -54,7 +54,7 @@ func StartServer(addr string, manager *Manager) error {
 			)
 		}
 
-		manager.EventsQueue.Enqueue(event)
+		manager.EventsQueue.EnqueueNow(event)
 		return c.NoContent(http.StatusCreated)
 	})
 
@@ -101,7 +101,7 @@ func StartServer(addr string, manager *Manager) error {
 
 		for _, t := range tasks {
 			event := task.Event{Task: t, Desired: task.Running}
-			manager.EventsQueue.Enqueue(event)
+			manager.EventsQueue.EnqueueNow(event)
 		}
 		return c.NoContent(http.StatusCreated)
 	})
@@ -114,7 +114,7 @@ func StartServer(addr string, manager *Manager) error {
 		}
 
 		event := task.Event{Task: t, Desired: task.Finished}
-		manager.EventsQueue.Enqueue(event)
+		manager.EventsQueue.EnqueueNow(event)
 		return c.NoContent(http.StatusCreated)
 	}, parseId)
 

@@ -88,7 +88,7 @@ func (m *Manager) Tasks() []task.Task {
 func (m *Manager) watchEventsQueue() {
 	for event := range m.EventsQueue.Out() {
 		if m.Store.WorkersNumber() == 0 { // NOTE(SergeyCherepiuk): No workers available
-			m.EventsQueue.Enqueue(event)
+			m.EventsQueue.EnqueueNow(event)
 			time.Sleep(EventQueueInterval)
 			continue
 		}
@@ -104,7 +104,7 @@ func (m *Manager) watchEventsQueue() {
 		}
 
 		if err != nil {
-			m.EventsQueue.Enqueue(event)
+			m.EventsQueue.EnqueueNow(event)
 			time.Sleep(EventQueueInterval)
 			continue
 		}
@@ -143,7 +143,7 @@ func (m *Manager) watchWorkerMessageQueue() {
 				m.Store.CommitChange(*cmd)
 
 				event := task.Event{Task: t, Desired: desired}
-				m.EventsQueue.Enqueue(event)
+				m.EventsQueue.EnqueueNow(event)
 			}
 		}
 	}
@@ -164,7 +164,7 @@ func (m *Manager) sendHeartbeats() {
 				for _, t := range worker.Tasks {
 					t.State = task.FailedAfterStartup
 					event := task.Event{Task: t, Desired: task.Running}
-					m.EventsQueue.Enqueue(event)
+					m.EventsQueue.EnqueueNow(event)
 				}
 
 				continue
@@ -223,9 +223,8 @@ func (m *Manager) scheduleRestart(t task.Task) {
 		backOffTime = lastBackOffTime * BackOffTimeCoefficient
 	}
 
-	processAfter := time.Now().Add(backOffTime)
 	event := task.Event{Task: t, Desired: task.Running}
-	m.EventsQueue.EnqueueWithDelay(processAfter, event)
+	m.EventsQueue.EnqueueWithDelay(backOffTime, event)
 }
 
 func (m *Manager) broadcastCommandsToWorker(addr node.Addr, cmds ...consensus.Command) {
